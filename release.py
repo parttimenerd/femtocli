@@ -5,7 +5,7 @@ Bump version and deploy minicli library.
 This script:
 1. Reads the current version from pom.xml
 2. Bumps the version (major/minor/patch)
-3. Updates pom.xml and Main.java with new version
+3. Updates pom.xml with new version
 4. Runs tests
 5. Builds the package
 6. Optionally deploys to Maven Central
@@ -26,8 +26,6 @@ class VersionBumper:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.pom_xml = project_root / "pom.xml"
-        # Update Main.java path to the minicli package
-        self.main_java = project_root / "src/main/java/me/bechberger/minicli/Main.java"
         self.readme = project_root / "README.md"
         self.changelog = project_root / "CHANGELOG.md"
         self.backup_dir = project_root / ".release-backup"
@@ -75,19 +73,6 @@ class VersionBumper:
         self.pom_xml.write_text(content)
         print(f"✓ Updated pom.xml: {old_version} -> {new_version}")
 
-    def update_main_java(self, old_version: str, new_version: str):
-        """Update version in Main.java"""
-        if not self.main_java.exists():
-            print(f"⚠ Main.java not found at {self.main_java}, skipping source update")
-            return
-        content = self.main_java.read_text()
-        content = content.replace(
-            f'version = "{old_version}"',
-            f'version = "{new_version}"'
-        )
-        self.main_java.write_text(content)
-        print(f"✓ Updated Main.java: {old_version} -> {new_version}")
-
     def update_readme(self, old_version: str, new_version: str):
         """Update version in README.md"""
         if not self.readme.exists():
@@ -107,10 +92,6 @@ class VersionBumper:
         print(f"\n  pom.xml:")
         print(f"    - <version>{old_version}</version>")
         print(f"    + <version>{new_version}</version>")
-
-        print(f"\n  Main.java:")
-        print(f"    - version = \"{old_version}\"")
-        print(f"    + version = \"{new_version}\"")
 
         print(f"\n  README.md:")
         print(f"    - <version>{old_version}</version>")
@@ -334,7 +315,6 @@ Download `minicli.jar` from the assets below.
 
         files_to_backup = [
             self.pom_xml,
-            self.main_java,
             self.readme,
             self.changelog
         ]
@@ -358,7 +338,6 @@ Download `minicli.jar` from the assets below.
 
         files_to_restore = [
             (self.backup_dir / "pom.xml", self.pom_xml),
-            (self.backup_dir / "Main.java", self.main_java),
             (self.backup_dir / "README.md", self.readme),
             (self.backup_dir / "CHANGELOG.md", self.changelog)
         ]
@@ -422,7 +401,7 @@ Download `minicli.jar` from the assets below.
     def git_commit(self, version: str):
         """Commit version changes"""
         self.run_command(
-            ['git', 'add', 'pom.xml', 'src/main/java/me/bechberger/minicli/Main.java', 'README.md', 'CHANGELOG.md'],
+            ['git', 'add', 'pom.xml', 'README.md', 'CHANGELOG.md'],
             "Staging files"
         )
         self.run_command(
@@ -554,7 +533,7 @@ Examples:
         print("  • mvn clean package")
         if do_deploy:
             print("  • mvn clean deploy -P release")
-        print(f"  • git add pom.xml Main.java README.md CHANGELOG.md")
+        print(f"  • git add pom.xml README.md CHANGELOG.md")
         print(f"  • git commit -m 'Bump version to {new_version}'")
         print(f"  • git tag -a v{new_version} -m 'Release {new_version}'")
         if do_push:
@@ -609,7 +588,6 @@ Examples:
         # Update version files
         print("\n=== Updating version files ===")
         bumper.update_pom_xml(current_version, new_version)
-        bumper.update_main_java(current_version, new_version)
         bumper.update_readme(current_version, new_version)
         bumper.update_changelog(new_version)
 
