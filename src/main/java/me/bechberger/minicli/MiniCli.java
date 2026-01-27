@@ -264,6 +264,78 @@ public final class MiniCli {
         validateRequiredOptions(cmd, model.options, seenFields);
     }
 
+    private static Object invokeConverterMethod(String spec, Object cmd, String raw, Class<?> targetType) throws Exception {
+        Method m = resolveMethod(spec, cmd != null ? cmd.getClass() : null);
+        boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
+        Object receiver = isStatic ? null : cmd;
+        if (!isStatic && receiver == null) {
+            throw new IllegalArgumentException("Converter method requires a command instance: " + spec);
+        }
+        // Expect single String parameter
+        if (m.getParameterCount() != 1 || m.getParameterTypes()[0] != String.class) {
+            throw new IllegalArgumentException("Converter method must take a single String argument: " + spec);
+        }
+        m.setAccessible(true);
+        Object result = m.invoke(receiver, raw);
+        if (result == null) return null;
+        if (targetType.isInstance(result)) return result;
+        if (isPrimitiveWrapperAssignable(targetType, result.getClass())) return result;
+        throw new IllegalArgumentException("Converter method returned incompatible type for " + spec);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void runVerifiers(Object cmdForErrors, Object value, Class<?> targetType, Option opt, Parameters param) throws UsageEx {
+        try {
+            if (opt != null) {
+                if (opt.verifier() != null && opt.verifier() != Verifier.NullVerifier.class) {
+                    Verifier v = opt.verifier().getDeclaredConstructor().newInstance();
+                    v.verify(value);
+                }
+                if (!opt.verifierMethod().isBlank()) {
+                    Method m = resolveMethod(opt.verifierMethod(), cmdForErrors != null ? cmdForErrors.getClass() : null);
+                    boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
+                    Object receiver = isStatic ? null : cmdForErrors;
+                    if (!isStatic && receiver == null) {
+                        throw new IllegalArgumentException("Verifier method requires a command instance: " + opt.verifierMethod());
+                    }
+                    if (m.getParameterCount() != 1) {
+                        throw new IllegalArgumentException("Verifier method must take a single argument: " + opt.verifierMethod());
+                    }
+                    m.setAccessible(true);
+                    m.invoke(receiver, value);
+                }
+            }
+
+            if (param != null) {
+                if (param.verifier() != null && param.verifier() != Verifier.NullVerifier.class) {
+                    Verifier v = param.verifier().getDeclaredConstructor().newInstance();
+                    v.verify(value);
+                }
+                if (!param.verifierMethod().isBlank()) {
+                    Method m = resolveMethod(param.verifierMethod(), cmdForErrors != null ? cmdForErrors.getClass() : null);
+                    boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
+                    Object receiver = isStatic ? null : cmdForErrors;
+                    if (!isStatic && receiver == null) {
+                        throw new IllegalArgumentException("Verifier method requires a command instance: " + param.verifierMethod());
+                    }
+                    if (m.getParameterCount() != 1) {
+                        throw new IllegalArgumentException("Verifier method must take a single argument: " + param.verifierMethod());
+                    }
+                    m.setAccessible(true);
+                    m.invoke(receiver, value);
+                }
+            }
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            Throwable cause = ite.getCause();
+            if (cause instanceof VerifierException ve) {
+                throw new UsageEx(cmdForErrors, ve.getMessage());
+            }
+            throw new UsageEx(cmdForErrors, cause != null ? cause.getMessage() : ite.getMessage());
+        } catch (Exception e) {
+            throw new UsageEx(cmdForErrors, e.getMessage());
+        }
+    }
+
     private static void parseOption(CommandModel model, Object cmd, String token, Deque<String> tokens,
                                     Set<Field> seenFields,
                                     Set<Field> seenFieldsWithoutValue,
@@ -316,7 +388,9 @@ public final class MiniCli {
                 values.add(value);
             }
         } else {
-            optMeta.field.set(optMeta.target, convert(value, type, optMeta.field.getName(), opt, converters));
+            Object converted = convert(value, type, optMeta.field.getName(), opt, converters, cmd);
+            runVerifiers(cmd, converted, type, opt, null);
+            optMeta.field.set(optMeta.target, converted);
         }
     }
 
@@ -336,11 +410,20 @@ public final class MiniCli {
                 Class<?> componentType = type.getComponentType();
                 Object array = Array.newInstance(componentType, values.size());
                 for (int i = 0; i < values.size(); i++) {
-                    Array.set(array, i, convert(values.get(i), componentType, field.getName(), opt, converters));
+                    Object converted = convert(values.get(i), componentType, field.getName(), opt, converters, model.cmd);
+                    runVerifiers(model.cmd, converted, componentType, opt, null);
+                    Array.set(array, i, converted);
                 }
                 field.set(target, array);
             } else {
-                field.set(target, new ArrayList<>(values));
+                // For lists we keep raw strings converted by caller's registered converters when binding positionals or options
+                List<Object> list = new ArrayList<>();
+                for (String v : values) {
+                    Object converted = convert(v, String.class, field.getName(), opt, converters, model.cmd);
+                    runVerifiers(model.cmd, converted, String.class, opt, null);
+                    list.add(converted);
+                }
+                field.set(target, list);
             }
         }
     }
@@ -503,13 +586,23 @@ public final class MiniCli {
             Class<?> componentType = field.getType().getComponentType();
             Object array = Array.newInstance(componentType, values.size());
             for (int i = 0; i < values.size(); i++) {
-                Array.set(array, i, convert(values.get(i), componentType, field.getName(), null, converters));
+                Object converted = convert(values.get(i), componentType, field.getName(), null, converters, cmd);
+                runVerifiers(cmd, converted, componentType, null, paramInfo.param);
+                Array.set(array, i, converted);
             }
             field.set(cmd, array);
         } else if (List.class.isAssignableFrom(field.getType())) {
-            field.set(cmd, new ArrayList<>(values));
+            List<Object> list = new ArrayList<>();
+            for (String v : values) {
+                Object converted = convert(v, String.class, field.getName(), null, converters, cmd);
+                runVerifiers(cmd, converted, String.class, null, paramInfo.param);
+                list.add(converted);
+            }
+            field.set(cmd, list);
         } else if (!values.isEmpty()) {
-            field.set(cmd, convert(values.getFirst(), field.getType(), field.getName(), null, converters));
+            Object converted = convert(values.getFirst(), field.getType(), field.getName(), null, converters, cmd);
+            runVerifiers(cmd, converted, field.getType(), null, paramInfo.param);
+            field.set(cmd, converted);
         }
 
         return startIndex + toConsume;
@@ -523,7 +616,9 @@ public final class MiniCli {
 
         if (currentIndex < positionals.size()) {
             String value = positionals.get(currentIndex);
-            field.set(cmd, convert(value, field.getType(), field.getName(), null, converters));
+            Object converted = convert(value, field.getType(), field.getName(), null, converters, cmd);
+            runVerifiers(cmd, converted, field.getType(), null, param);
+            field.set(cmd, converted);
             return currentIndex + 1;
         }
 
@@ -532,7 +627,9 @@ public final class MiniCli {
         }
 
         if (!param.defaultValue().isEmpty()) {
-            field.set(cmd, convert(param.defaultValue(), field.getType(), field.getName(), null, converters));
+            Object converted = convert(param.defaultValue(), field.getType(), field.getName(), null, converters, cmd);
+            runVerifiers(cmd, converted, field.getType(), null, param);
+            field.set(cmd, converted);
         }
 
         return currentIndex;
@@ -597,7 +694,7 @@ public final class MiniCli {
                 break;
             }
         }
-        if (unitStart <= 0 || unitStart >= lower.length()) {
+        if (unitStart <= 0) {
             throw new IllegalArgumentException("Invalid duration: " + raw);
         }
 
@@ -750,19 +847,30 @@ public final class MiniCli {
                                   Map<Class<?>, TypeConverter<?>> converters,
                                   Object cmdForErrors) throws UsageEx {
         try {
-            // 1) Custom converter
+            // 0) Per-option converter method
+            if (opt != null && !opt.converterMethod().isBlank()) {
+                return invokeConverterMethod(opt.converterMethod(), cmdForErrors, value, type);
+            }
+
+            // 1) Per-option converter class
+            if (opt != null && opt.converter() != TypeConverter.NullTypeConverter.class) {
+                TypeConverter<?> perOpt = opt.converter().getDeclaredConstructor().newInstance();
+                return perOpt.convert(value);
+            }
+
+            // 2) Custom converter
             TypeConverter<?> custom = converters.get(type);
             if (custom != null) {
                 return custom.convert(value);
             }
 
-            // 2) Built-in converter
+            // 3) Built-in converter
             TypeConverter<?> builtin = BUILTIN_CONVERTERS.get(type);
             if (builtin != null) {
                 return builtin.convert(value);
             }
 
-            // 3) Enums (case-insensitive)
+            // 4) Enums (case-insensitive)
             if (type.isEnum()) {
                 @SuppressWarnings({"rawtypes", "unchecked"})
                 Class<? extends Enum> e = (Class<? extends Enum>) type;
@@ -786,15 +894,6 @@ public final class MiniCli {
             }
             throw new UsageEx(cmdForErrors, "Invalid value for " + displayName + ": " + value);
         }
-    }
-
-    // Keep the old signature for existing call sites; route to the contextual one.
-    private static Object convert(String value,
-                                  Class<?> type,
-                                  String fieldName,
-                                  Option opt,
-                                  Map<Class<?>, TypeConverter<?>> converters) throws UsageEx {
-        return convert(value, type, fieldName, opt, converters, null);
     }
 
     /**
@@ -831,5 +930,47 @@ public final class MiniCli {
             }
             f.set(model.cmd, spec);
         }
+    }
+
+    private static Method resolveMethod(String spec, Class<?> defaultClass) throws ClassNotFoundException, NoSuchMethodException {
+        String classPart;
+        String methodPart;
+        if (spec.contains("#")) {
+            String[] parts = spec.split("#", 2);
+            classPart = parts[0];
+            methodPart = parts[1];
+        } else {
+            classPart = null;
+            methodPart = spec;
+        }
+
+        Class<?> owner = (classPart == null || classPart.isBlank())
+                ? Objects.requireNonNull(defaultClass, "No default class available for method: " + spec)
+                : Class.forName(classPart);
+
+        for (Method m : owner.getDeclaredMethods()) {
+            if (m.getName().equals(methodPart)) {
+                return m;
+            }
+        }
+        for (Method m : owner.getMethods()) {
+            if (m.getName().equals(methodPart)) {
+                return m;
+            }
+        }
+        throw new NoSuchMethodException("Cannot find method " + methodPart + " on " + owner.getName());
+    }
+
+    private static boolean isPrimitiveWrapperAssignable(Class<?> targetType, Class<?> actualType) {
+        if (targetType == null || actualType == null) return false;
+        if (!targetType.isPrimitive()) return false;
+        return (targetType == int.class && actualType == Integer.class)
+                || (targetType == long.class && actualType == Long.class)
+                || (targetType == double.class && actualType == Double.class)
+                || (targetType == float.class && actualType == Float.class)
+                || (targetType == boolean.class && actualType == Boolean.class)
+                || (targetType == short.class && actualType == Short.class)
+                || (targetType == byte.class && actualType == Byte.class)
+                || (targetType == char.class && actualType == Character.class);
     }
 }

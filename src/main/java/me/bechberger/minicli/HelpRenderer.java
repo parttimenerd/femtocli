@@ -246,7 +246,7 @@ final class HelpRenderer {
         String indent = " ".repeat(Math.max(0, subsequentIndent));
         List<String> lines = wrapLines(text, maxWidth);
         if (lines.isEmpty()) return "";
-        StringBuilder sb = new StringBuilder(lines.get(0));
+        StringBuilder sb = new StringBuilder(lines.getFirst());
         for (int i = 1; i < lines.size(); i++) {
             sb.append("\n").append(indent).append(lines.get(i));
         }
@@ -266,7 +266,7 @@ final class HelpRenderer {
         StringBuilder currentLine = new StringBuilder();
 
         for (String word : words) {
-            if (currentLine.length() == 0) {
+            if (currentLine.isEmpty()) {
                 currentLine.append(word);
             } else if (currentLine.length() + 1 + word.length() <= maxWidth) {
                 currentLine.append(" ").append(word);
@@ -276,7 +276,7 @@ final class HelpRenderer {
             }
         }
 
-        if (currentLine.length() > 0) {
+        if (!currentLine.isEmpty()) {
             lines.add(currentLine.toString());
         }
 

@@ -25,7 +25,7 @@ public final class Spec {
     public PrintStream out() { return out; }
     public PrintStream err() { return err; }
 
-    /** The resolved command path for this execution (e.g. ["jstall", "ai", "full"]). */
+    /** The resolved command path for this execution. */
     public List<String> commandPath() { return commandPath; }
 
     /** The effective CommandConfig used for this execution (defensive copy). */

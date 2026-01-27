@@ -2,6 +2,7 @@ package me.bechberger.minicli.annotations;
 
 import me.bechberger.minicli.CommandConfig;
 import me.bechberger.minicli.TypeConverter;
+import me.bechberger.minicli.Verifier;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -55,7 +56,20 @@ public @interface Option {
      * Custom converter class for this option.
      * Must implement {@link TypeConverter} and have a no-arg constructor.
      */
-    Class<? extends TypeConverter> converter() default TypeConverter.class;
+    Class<? extends TypeConverter<?>> converter() default TypeConverter.NullTypeConverter.class;
+
+    /**
+     * Custom converter method.
+     *
+     * <p>Supported forms:</p>
+     * <ul>
+     *   <li>{@code "methodName"} - instance method on the command class</li>
+     *   <li>{@code "ClassName#methodName"} - static method on another class (must be resolvable via reflection)</li>
+     * </ul>
+     *
+     * <p>The method must accept a single {@code String} and return the target type.</p>
+     */
+    String converterMethod() default "";
 
     /**
      * Whether MiniCli should automatically append the default value to the rendered help text
@@ -79,4 +93,23 @@ public @interface Option {
      * <p>This is useful for long option descriptions where the default should stand out.
      */
     boolean defaultValueOnNewLine() default false;
+
+    /**
+     * Custom verifier class for this option.
+     * Must implement {@link Verifier} and have a no-arg constructor.
+     */
+    Class<? extends Verifier<?>> verifier() default Verifier.NullVerifier.class;
+
+    /**
+     * Custom verifier method.
+     *
+     * <p>Supported forms:</p>
+     * <ul>
+     *   <li>{@code "methodName"} - instance method on the command class</li>
+     *   <li>{@code "ClassName#methodName"} - static method on another class</li>
+     * </ul>
+     *
+     * <p>The method must accept a single argument of the option's target type and return void.</p>
+     */
+    String verifierMethod() default "";
 }

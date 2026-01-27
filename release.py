@@ -11,13 +11,18 @@ This script:
 6. Optionally deploys to Maven Central
 7. Creates a git tag and commits the changes
 
-Note: The "minimal" build/test flow has been removed from this adapted script.
+Minimal artifact release:
+- The minimal artifact is published as a separate artifactId: `minicli-minimal`
+- It is built by copying the repository into a temporary folder and patching pom.xml
+  (artifactId + minimal compiler flags), then deploying from there.
 """
 
 import re
 import sys
 import subprocess
 import argparse
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -262,7 +267,7 @@ class VersionBumper:
 ### Maven
 ```xml
 <dependency>
-    <groupId>me.bechberger.jfr</groupId>
+    <groupId>me.bechberger.util</groupId>
     <artifactId>minicli</artifactId>
     <version>{version}</version>
 </dependency>
@@ -277,14 +282,20 @@ Download `minicli.jar` from the assets below.
         notes_file.write_text(release_notes)
 
         try:
-            # Build jar path
+            # Build jar paths
             jar_path = self.project_root / 'target' / 'minicli.jar'
+            minimal_path = self.project_root / 'target' / 'minicli-minimal.jar'
 
             assets = []
             if jar_path.exists():
                 assets.append(str(jar_path) + '#minicli.jar')
             else:
                 print(f"⚠ JAR not found at {jar_path}")
+
+            if minimal_path.exists():
+                assets.append(str(minimal_path) + '#minicli-minimal.jar')
+            else:
+                print(f"⚠ Minimal JAR not found at {minimal_path}")
 
             create_cmd = ['gh', 'release', 'create', tag,
                           '--title', f'Release {version}',
@@ -390,12 +401,98 @@ Download `minicli.jar` from the assets below.
             "Building package"
         )
 
-    def deploy_release(self):
-        """Deploy to Maven Central using release profile"""
+    def _copy_repo_to_temp(self) -> Path:
+        """Copy the repository to a temporary folder for the minimal build."""
+        tmp = Path(tempfile.mkdtemp(prefix="minicli-minimal-"))
+        ignore = shutil.ignore_patterns(
+            ".git", ".idea", ".mvn", "target", ".release-backup", "__pycache__", ".release-notes.md"
+        )
+        shutil.copytree(self.project_root, tmp / "repo", dirs_exist_ok=True, ignore=ignore)
+        return tmp / "repo"
+
+    def _prepare_minimal_workspace(self) -> tuple[Path, Path]:
+        """Create and patch a temp workspace for building/testing/deploying the minimal artifact."""
+        tmp_repo = self._copy_repo_to_temp()
+        tmp_pom = tmp_repo / 'pom.xml'
+        self._patch_pom_for_minimal(tmp_pom)
+        return tmp_repo, tmp_pom
+
+    def build_minimal(self):
+        """Build the minimal artifact (as separate artifactId) in a temp workspace.
+
+        Copies the resulting jar into this repo's target/ folder as:
+        - target/minicli-minimal.jar
+        """
+        tmp_repo, _ = self._prepare_minimal_workspace()
+        try:
+            self.run_command(
+                ['mvn', 'clean', 'package', '-P', 'minimal'],
+                "Building minimal artifact (temp workspace)",
+                cwd=tmp_repo
+            )
+
+            # Copy resulting jar back into this repo's target/ as a convenience.
+            out_target = self.project_root / 'target'
+            out_target.mkdir(parents=True, exist_ok=True)
+
+            # Prefer the project jar name (usually minicli-minimal-<version>.jar).
+            built_jars = sorted((tmp_repo / 'target').glob('*.jar'))
+            chosen = None
+            for p in built_jars:
+                # avoid sources/javadoc jars if present
+                if p.name.endswith('-sources.jar') or p.name.endswith('-javadoc.jar'):
+                    continue
+                if p.name.startswith('minicli-minimal') and p.name.endswith('.jar'):
+                    chosen = p
+                    break
+            if chosen is None:
+                # fallback: any non-sources/javadoc jar
+                chosen = next((p for p in built_jars if not (p.name.endswith('-sources.jar') or p.name.endswith('-javadoc.jar'))), None)
+
+            if chosen is None:
+                raise RuntimeError("Minimal build succeeded but no jar was found in temp target/")
+
+            dest = out_target / 'minicli-minimal.jar'
+            shutil.copy2(chosen, dest)
+            print(f"✓ Wrote minimal jar to {dest}")
+
+        finally:
+            shutil.rmtree(tmp_repo.parent, ignore_errors=True)
+
+    def test_minimal(self):
+        """Run tests while compiling with minimal settings (temp workspace)."""
+        tmp_repo, _ = self._prepare_minimal_workspace()
+        try:
+            self.run_command(
+                ['mvn', 'clean', 'test', '-P', 'minimal'],
+                "Running tests (minimal build, temp workspace)",
+                cwd=tmp_repo
+            )
+        finally:
+            shutil.rmtree(tmp_repo.parent, ignore_errors=True)
+
+    def deploy_release(self, include_minimal: bool):
+        """Deploy to Maven Central, publishing both 'minicli' and 'minicli-minimal'."""
+        # 1) Deploy normal artifact
         self.run_command(
             ['mvn', 'clean', 'deploy', '-P', 'release'],
-            "Deploying to Maven Central"
+            "Deploying to Maven Central (main artifact)",
+            cwd=self.project_root
         )
+
+        if not include_minimal:
+            return
+
+        # 2) Deploy minimal artifact from temp workspace
+        tmp_repo, _ = self._prepare_minimal_workspace()
+        try:
+            self.run_command(
+                ['mvn', 'clean', 'deploy', '-P', 'release,minimal'],
+                "Deploying to Maven Central (minimal artifact)",
+                cwd=tmp_repo
+            )
+        finally:
+            shutil.rmtree(tmp_repo.parent, ignore_errors=True)
 
     def git_commit(self, version: str):
         """Commit version changes"""
@@ -428,6 +525,57 @@ Download `minicli.jar` from the assets below.
                 "Pushing tags"
             )
 
+    def _patch_pom_for_minimal(self, pom_path: Path):
+        """Patch pom.xml in-place for minimal publication as a separate artifactId.
+
+        Changes:
+        - artifactId: minicli -> minicli-minimal (first occurrence only)
+        - ensure a `minimal` Maven profile exists that strips debug symbols
+
+        Note: this is applied only in a temporary workspace created by the release script.
+        """
+        content = pom_path.read_text()
+
+        # Replace only the first occurrence (the project's artifactId)
+        content = content.replace(
+            '<artifactId>minicli</artifactId>',
+            '<artifactId>minicli-minimal</artifactId>',
+            1,
+        )
+
+        # Ensure minimal profile exists
+        if '<id>minimal</id>' not in content:
+            minimal_profile = """
+        <profile>
+            <id>minimal</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <debug>false</debug>
+                            <parameters>false</parameters>
+                            <compilerArgs>
+                                <arg>-g:none</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+"""
+            if '</profiles>' in content:
+                content = content.replace('</profiles>', minimal_profile + '    </profiles>', 1)
+            else:
+                # Insert a new profiles section before </project>
+                content = content.replace(
+                    '</project>',
+                    f'    <profiles>{minimal_profile}    </profiles>\n</project>',
+                    1,
+                )
+
+        pom_path.write_text(content)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -482,6 +630,21 @@ Examples:
         action='store_true',
         help='Show what would happen without making changes'
     )
+    parser.add_argument(
+        '--no-minimal',
+        action='store_true',
+        help='Skip building/publishing the minimal artifact (separate artifactId minicli-minimal)'
+    )
+    parser.add_argument(
+        '--build-minimal',
+        action='store_true',
+        help='Only build the minimal artifact (does not deploy)'
+    )
+    parser.add_argument(
+        '--test-minimal',
+        action='store_true',
+        help='Only run tests with the minimal build settings (does not deploy)'
+    )
 
     args = parser.parse_args()
 
@@ -490,6 +653,15 @@ Examples:
     project_root = script_path.parent
 
     bumper = VersionBumper(project_root)
+
+    # Standalone commands
+    if args.build_minimal:
+        bumper.build_minimal()
+        return
+
+    if args.test_minimal:
+        bumper.test_minimal()
+        return
 
     # Get current version
     current_version = bumper.get_current_version()
@@ -512,6 +684,7 @@ Examples:
     do_deploy = not args.no_deploy
     do_github_release = not args.no_github_release
     do_push = not args.no_push
+    do_minimal = not args.no_minimal
 
     # Validate changelog before proceeding (unless dry-run)
     if not args.dry_run:
@@ -530,8 +703,16 @@ Examples:
         if not args.skip_tests:
             print("  • mvn clean test")
         print("  • mvn clean package")
+
         if do_deploy:
+            # In deploy mode we do TWO deploys when minimal is enabled.
             print("  • mvn clean deploy -P release")
+            if do_minimal:
+                print("  • (temp copy) mvn clean deploy -P release,minimal")
+        else:
+            if do_minimal:
+                print("  • (temp copy) mvn clean package -P minimal")
+
         print(f"  • git add pom.xml README.md CHANGELOG.md")
         print(f"  • git commit -m 'Bump version to {new_version}'")
         print(f"  • git tag -a v{new_version} -m 'Release {new_version}'")
@@ -558,6 +739,10 @@ Examples:
 
     print(f"  {step}. Build package")
     step += 1
+
+    if do_minimal and not do_deploy:
+        print(f"  {step}. Build minimal artifact")
+        step += 1
 
     if do_deploy:
         print(f"  {step}. Deploy to Maven Central")
@@ -594,12 +779,21 @@ Examples:
         if not args.skip_tests:
             print("\n=== Running tests ===")
             bumper.run_tests()
+            # Also run minimal tests by default when releasing minimal
+            if do_minimal:
+                print("\n=== Running minimal tests ===")
+                bumper.test_minimal()
         else:
             print("\n⚠ Skipping tests")
 
         # Build package
         print("\n=== Building package ===")
         bumper.build_package()
+
+        # Ensure minimal artifact is built for GitHub release assets
+        if do_minimal:
+            print("\n=== Building minimal artifact ===")
+            bumper.build_minimal()
 
         # Deploy
         if do_deploy:
@@ -612,7 +806,7 @@ Examples:
                 print("Skipping deployment.")
                 do_deploy = False
             else:
-                bumper.deploy_release()
+                bumper.deploy_release(include_minimal=do_minimal)
 
         # Git operations
         print("\n=== Git operations ===")
@@ -652,6 +846,7 @@ Examples:
     print(f"  ✓ CHANGELOG.md updated")
     print(f"  ✓ Tests passed" if not args.skip_tests else "  ⊘ Tests skipped")
     print(f"  ✓ Package built")
+    print(f"  ✓ Minimal artifact built" if do_minimal else "  ⊘ Minimal artifact skipped")
     print(f"  ✓ Deployed to Maven Central" if do_deploy else "  ⊘ Deployment skipped")
     print(f"  ✓ Git commit and tag created")
     print(f"  ✓ Pushed to remote" if do_push else "  ⊘ Push skipped")
@@ -662,6 +857,8 @@ Examples:
     print(f"  • target/minicli-{new_version}.jar")
     print(f"  • target/minicli-{new_version}-sources.jar")
     print(f"  • target/minicli-{new_version}-javadoc.jar")
+    if do_minimal:
+        print(f"  • target/minicli-minimal.jar")
 
     if do_github_release:
         print(f"\n📦 GitHub Release:")
@@ -669,7 +866,7 @@ Examples:
 
     if do_deploy:
         print(f"\n📦 Maven Central:")
-        print(f"  https://central.sonatype.com/artifact/me.bechberger.jfr/minicli/{new_version}")
+        print(f"  https://central.sonatype.com/artifact/me.bechberger.util/minicli/{new_version}")
 
 if __name__ == "__main__":
     main()
