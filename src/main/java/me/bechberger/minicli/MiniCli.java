@@ -57,7 +57,13 @@ public final class MiniCli {
             ByteArrayOutputStream errStream = new ByteArrayOutputStream();
             PrintStream out = new PrintStream(outStream);
             PrintStream err = new PrintStream(errStream);
+            PrintStream oldOut = System.out;
+            PrintStream oldErr = System.err;
+            System.setOut(out);
+            System.setErr(err);
             int exitCode = MiniCli.execute(root, out, err, args, converters, commandConfig);
+            System.setOut(oldOut);
+            System.setErr(oldErr);
             return new RunResult(outStream.toString(), errStream.toString(), exitCode);
         }
     }
@@ -330,7 +336,8 @@ public final class MiniCli {
                                   || (seenFieldsWithoutValue.contains(field) && !opt.defaultValue().isEmpty());
 
             if (shouldApply) {
-                field.set(optMeta.target, convert(opt.defaultValue(), field.getType(), field.getName(), opt, converters));
+                optMeta.field.set(optMeta.target,
+                        convert(opt.defaultValue(), field.getType(), field.getName(), opt, converters, model.cmd));
                 seenFields.add(field);
             }
         }
@@ -719,20 +726,19 @@ public final class MiniCli {
                                   Class<?> type,
                                   String fieldName,
                                   Option opt,
-                                  Map<Class<?>, TypeConverter<?>> converters) throws UsageEx {
-        // Important: don't trim globally; some options might intentionally accept leading/trailing spaces.
-        String raw = value;
+                                  Map<Class<?>, TypeConverter<?>> converters,
+                                  Object cmdForErrors) throws UsageEx {
         try {
             // 1) Custom converter
             TypeConverter<?> custom = converters.get(type);
             if (custom != null) {
-                return custom.convert(raw);
+                return custom.convert(value);
             }
 
             // 2) Built-in converter
             TypeConverter<?> builtin = BUILTIN_CONVERTERS.get(type);
             if (builtin != null) {
-                return builtin.convert(raw);
+                return builtin.convert(value);
             }
 
             // 3) Enums (case-insensitive)
@@ -740,27 +746,34 @@ public final class MiniCli {
                 @SuppressWarnings({"rawtypes", "unchecked"})
                 Class<? extends Enum> e = (Class<? extends Enum>) type;
                 for (Enum<?> c : e.getEnumConstants()) {
-                    if (c.name().equalsIgnoreCase(raw)) {
+                    if (c.name().equalsIgnoreCase(value)) {
                         return c;
                     }
                 }
-                // Fall back to default enum parser for the best exception message
                 @SuppressWarnings({"rawtypes", "unchecked"})
-                Enum<?> parsed = Enum.valueOf((Class) e, raw.toUpperCase(Locale.ROOT));
+                Enum<?> parsed = Enum.valueOf((Class) e, value.toUpperCase(Locale.ROOT));
                 return parsed;
             }
 
-            throw new UsageEx(null, "Unsupported field type: " + type.getName());
+            throw new UsageEx(cmdForErrors, "Unsupported field type: " + type.getName());
         } catch (UsageEx e) {
             throw e;
         } catch (Exception e) {
-            // Re-wrap conversion errors as UsageEx so callers consistently return exit code 2.
             String displayName = preferredOptionName(opt);
             if (opt == null) {
                 displayName = "<" + fieldName + ">";
             }
-            throw new UsageEx(null, "Invalid value for " + displayName + ": " + raw);
+            throw new UsageEx(cmdForErrors, "Invalid value for " + displayName + ": " + value);
         }
+    }
+
+    // Keep the old signature for existing call sites; route to the contextual one.
+    private static Object convert(String value,
+                                  Class<?> type,
+                                  String fieldName,
+                                  Option opt,
+                                  Map<Class<?>, TypeConverter<?>> converters) throws UsageEx {
+        return convert(value, type, fieldName, opt, converters, null);
     }
 
     /**

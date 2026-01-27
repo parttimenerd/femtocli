@@ -2335,4 +2335,63 @@ class MiniCliTest {
             return 0;
         }
     }
+
+    @Command(name = "defaultTest")
+    static class DefaultTest implements Callable<Integer> {
+        @Option(names = {"-i", "--interval"}, defaultValue = "10ms", description = "Sampling interval (default: 10ms)")
+        private Duration interval;
+
+        @Override
+        public Integer call() {
+            System.out.println(interval.toMillis());
+            return 0;
+        }
+    }
+
+    @Test
+    void defaultDurationParsing() {
+        var res = MiniCli.builder()
+                .commandConfig(cfg -> {
+                    cfg.version = "0.4.5";
+                    cfg.mixinStandardHelpOptions = true;
+                    cfg.defaultValueHelpTemplate = ", default is ${DEFAULT-VALUE}";
+                    cfg.defaultValueOnNewLine = false;
+                })
+                .runCaptured(new DefaultTest());
+        assertEquals(0, res.exitCode());
+        assertEquals("10", res.out().trim());
+    }
+
+    @Command(name = "main", subcommands = DefaultTest2.class)
+    static class SomeMainCommand implements Runnable {
+        @Override
+        public void run() {
+        }
+    }
+
+    @Command(name = "defaultTest")
+    static class DefaultTest2 implements Callable<Integer> {
+        @Option(names = {"-i", "--interval"}, defaultValue = "10ms", description = "Sampling interval (default: 10ms)")
+        private Duration interval;
+
+        @Override
+        public Integer call() {
+            System.out.println(interval.toMillis());
+            return 0;
+        }
+    }
+
+    @Test
+    void defaultDurationParsingInSubcommand() {
+        var res = MiniCli.builder()
+                .commandConfig(cfg -> {
+                    cfg.version = "0.4.5";
+                    cfg.mixinStandardHelpOptions = true;
+                    cfg.defaultValueHelpTemplate = ", default is ${DEFAULT-VALUE}";
+                    cfg.defaultValueOnNewLine = false;
+                })
+                .runCaptured(new SomeMainCommand(), "defaultTest");
+        assertEquals(0, res.exitCode());
+        assertEquals("10", res.out().trim());
+    }
 }
