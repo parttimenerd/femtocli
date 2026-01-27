@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.4] - 2026-01-27
+
+### Added
+- Spec mechanism to access usage and print streams at runtime in commands
+
 ## [0.1.3] - 2026-01-27
 
 ### Fixed

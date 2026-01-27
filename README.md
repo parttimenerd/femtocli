@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.jfr/minicli)](https://central.sonatype.com/artifact/me.bechberger.jfr/minicli)
 
-A minimal (< 40KB) Java command line interface (CLI) framework for building small command line applications,
+A minimal (< 45KB) Java command line interface (CLI) framework for building small command line applications,
 using annotations to define commands, options, and positional parameters. 
 It is designed for tools where minimizing dependencies and binary size is important.
 
@@ -81,7 +81,7 @@ Add the library as a dependency in your project:
 <dependency>
   <groupId>me.bechberger.jfr</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.3</version>
+  <version>0.1.4</version>
 </dependency>
 ```
 
@@ -313,6 +313,44 @@ int exit = MiniCli.builder()
         c.showDefaultValuesInHelp = false;
     })
     .run(new MyApp(), System.out, System.err, args);
+```
+
+### Spec injection (access to CLI runtime)
+
+Commands can declare a plain `Spec` field (no annotation). MiniCli injects it at runtime.
+
+It gives access to:
+- the configured output/error streams (`spec.out()`, `spec.err()`)
+- the effective command path + `CommandConfig`
+- `spec.usage()` / `spec.usage(PrintStream)` (rendered using the current MiniCli configuration)
+
+```java
+import me.bechberger.minicli.*;
+import me.bechberger.minicli.annotations.Command;
+import me.bechberger.minicli.annotations.Option;
+
+import java.io.PrintStream;
+import java.time.Duration;
+
+@Command(name = "inspect", description = "Example that uses Spec", mixinStandardHelpOptions = true)
+class Inspect implements Runnable {
+    Spec spec; // injected
+
+    @Option(names = {"-i", "--interval"},
+            defaultValue = "10ms",
+            description = "Sampling interval (default: ${DEFAULT-VALUE})")
+    Duration interval;
+
+    @Override
+    public void run() {
+        // Use the configured streams
+        spec.out().println("interval(ms)=" + interval.toMillis());
+        // Print usage with the same formatting as the current MiniCli run
+        spec.usage();
+        // Or print usage into any stream
+        spec.usage(new PrintStream(System.out));
+    }
+}
 ```
 
 Testing
