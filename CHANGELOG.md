@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.5] - 2026-01-27
+
+### Added
+- More flexible converters
+- Verifier for options
+
 ## [0.1.4] - 2026-01-27
 
 ### Added

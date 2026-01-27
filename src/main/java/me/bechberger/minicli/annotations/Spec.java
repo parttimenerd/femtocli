@@ -1,1 +1,0 @@
-// deleted; the Spec injection mechanism is type-based now.

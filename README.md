@@ -1,8 +1,8 @@
 # minicli
 
-[![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.jfr/minicli)](https://central.sonatype.com/artifact/me.bechberger.jfr/minicli)
+[![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/minicli)](https://central.sonatype.com/artifact/me.bechberger.util/minicli)
 
-A minimal (< 45KB) Java command line interface (CLI) framework for building small command line applications,
+A minimal (< 40KB) Java command line interface (CLI) framework for building small command line applications,
 using annotations to define commands, options, and positional parameters. 
 It is designed for tools where minimizing dependencies and binary size is important.
 
@@ -75,13 +75,23 @@ class MyApp implements Runnable {
 Maven dependency
 ----------------
 
-Add the library as a dependency in your project:
+Add the library as a dependency in your project (< 50KB):
 
 ```xml
 <dependency>
-  <groupId>me.bechberger.jfr</groupId>
+  <groupId>me.bechberger.util</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.4</version>
+  <version>0.1.5</version>
+</dependency>
+```
+
+And for the minimal version without debug metadata (< 40KB):
+
+```xml
+<dependency>
+  <groupId>me.bechberger.util</groupId>
+  <artifactId>minicli-minimal</artifactId>
+  <version>0.1.5</version>
 </dependency>
 ```
 
@@ -349,6 +359,44 @@ class Inspect implements Runnable {
         spec.usage();
         // Or print usage into any stream
         spec.usage(new PrintStream(System.out));
+    }
+}
+```
+
+### Verifier and converter methods
+
+```java
+import me.bechberger.minicli.*;
+import me.bechberger.minicli.annotations.Command;
+import me.bechberger.minicli.annotations.Option;
+
+import java.time.Duration;
+
+@Command(name = "tiny", description = "Tiny demo")
+class Tiny implements Runnable {
+    Spec spec; // injected
+
+    @Option(names = {"-i", "--interval"}, defaultValue = "10ms",
+            description = "Polling interval (e.g. 10ms, 1s)")
+    Duration interval;
+
+    @Option(names = "--port", converterMethod = "com.example.Helpers#parsePort", verifierMethod = "checkPort")
+    int port;
+
+    // instance verifier method (called via verifierMethod = "checkPort")
+    void checkPort(int p) {
+        if (p < 1 || p > 65535) throw new VerifierException("port out of range");
+    }
+
+    @Override
+    public void run() {
+        spec.out().println("interval ms: " + interval.toMillis());
+        spec.out().println("port: " + port);
+        spec.usage();
+    }
+
+    public static void main(String[] args) {
+        System.exit(MiniCli.builder().run(new Tiny(), System.out, System.err, args));
     }
 }
 ```
