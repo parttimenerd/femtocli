@@ -11,6 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -1935,549 +1936,6 @@ class MiniCliTest {
     }
 
     @Test
-    void unsupportedTypeWithoutConverterReturns2() {
-        // Duration without registering a converter should fail
-        CustomTypeCmd cmd = new CustomTypeCmd();
-        var res = run(cmd, "--duration", "PT1H");
-
-        assertEquals(2, res.exitCode());
-        assertThat(res.err()).contains("Unsupported field type");
-    }
-
-    @Test
-    void customTypeConverterWithMapOverload() {
-        CustomTypeCmd cmd = new CustomTypeCmd();
-        // This overload passes a converters map directly to the legacy MiniCli.run API.
-        java.util.Map<Class<?>, TypeConverter<?>> converters = new java.util.HashMap<>();
-        converters.put(java.time.Duration.class, java.time.Duration::parse);
-
-        // The map-overload currently requires using the MiniCli.run procedural API.
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ByteArrayOutputStream err = new ByteArrayOutputStream();
-        int code = MiniCli.run(cmd, new PrintStream(out), new PrintStream(err),
-                new String[]{"--duration", "PT30M"}, converters);
-
-        assertEquals(0, code);
-        assertEquals(java.time.Duration.ofMinutes(30), cmd.duration);
-    }
-
-    // Custom type for testing
-    record Point(int x, int y) {
-    }
-
-    @Command(name = "point-cmd", description = "Test Point type", mixinStandardHelpOptions = true)
-    static class PointCmd implements Callable<Integer> {
-        @Option(names = "--point", description = "Point in x,y format")
-        Point point;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void customTypeConverterForRecord() {
-        PointCmd cmd = new PointCmd();
-        var res = MiniCli.builder()
-                .registerType(Point.class, s -> {
-                    String[] parts = s.split(",");
-                    return new Point(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-                })
-                .runCaptured(cmd, "--point", "10,20");
-
-        assertEquals(0, res.exitCode());
-        assertEquals(new Point(10, 20), cmd.point);
-    }
-
-    // ========== Header and customSynopsis tests ==========
-
-    @Command(
-            name = "header-cmd",
-            header = {"My Application v1.0", "Copyright 2026"},
-            description = "A command with header",
-            mixinStandardHelpOptions = true
-    )
-    static class HeaderCmd implements Runnable {
-        @Override
-        public void run() {
-        }
-    }
-
-    @Test
-    void headerShownBeforeUsage() {
-        CliTest test = CliTest.of(new HeaderCmd())
-                .args("--help")
-                .run()
-                .expectCode(0);
-
-        String help = test.stdout();
-        // Header should appear before Usage
-        int headerPos = help.indexOf("My Application v1.0");
-        int usagePos = help.indexOf("Usage:");
-        assertThat(headerPos).isGreaterThanOrEqualTo(0);
-        assertThat(usagePos).isGreaterThan(headerPos);
-        assertThat(help).contains("Copyright 2026");
-    }
-
-    @Command(
-            name = "synopsis-cmd",
-            customSynopsis = {"Usage: synopsis-cmd <file> [options]", "       synopsis-cmd --batch <files>..."},
-            description = "A command with custom synopsis",
-            mixinStandardHelpOptions = true
-    )
-    static class SynopsisCmd implements Runnable {
-        @Override
-        public void run() {
-        }
-    }
-
-    @Test
-    void customSynopsisUsedInsteadOfDefault() {
-        CliTest test = CliTest.of(new SynopsisCmd())
-                .args("--help")
-                .run()
-                .expectCode(0);
-
-        String help = test.stdout();
-        assertThat(help).contains("Usage: synopsis-cmd <file> [options]");
-        assertThat(help).contains("synopsis-cmd --batch <files>...");
-        // Should NOT contain the auto-generated synopsis
-        assertThat(help).doesNotContain("Usage: synopsis-cmd [-hV]");
-    }
-
-    @Command(
-            name = "full-header-cmd",
-            header = {"=== My Tool ==="},
-            customSynopsis = {"mytool [--option] FILE"},
-            description = "Full header and synopsis test",
-            mixinStandardHelpOptions = true
-    )
-    static class FullHeaderCmd implements Runnable {
-        @Override
-        public void run() {
-        }
-    }
-
-    @Test
-    void headerAndSynopsisTogetherWork() {
-        CliTest test = CliTest.of(new FullHeaderCmd())
-                .args("--help")
-                .run()
-                .expectCode(0);
-
-        String help = test.stdout();
-        int headerPos = help.indexOf("=== My Tool ===");
-        int synopsisPos = help.indexOf("mytool [--option] FILE");
-        int descPos = help.indexOf("Full header and synopsis test");
-
-        assertThat(headerPos).isGreaterThanOrEqualTo(0);
-        assertThat(synopsisPos).isGreaterThan(headerPos);
-        assertThat(descPos).isGreaterThan(synopsisPos);
-    }
-
-    // ========== Mixin tests helpers ==========
-
-    static class CommonOptions {
-        @Option(names = {"-v", "--verbose"}, description = "Enable verbose output")
-        boolean verbose;
-
-        @Option(names = {"-q", "--quiet"}, description = "Suppress output")
-        boolean quiet;
-
-        @Option(names = "--log-level", description = "Log level", defaultValue = "info")
-        String logLevel;
-    }
-
-    // ========== Nested mixin tests ==========
-
-    static class DatabaseOptions {
-        @Option(names = "--db-host", description = "Database host", defaultValue = "localhost")
-        String host;
-
-        @Option(names = "--db-port", description = "Database port", defaultValue = "5432")
-        int port;
-    }
-
-    @Command(name = "multi-mixin", description = "Multiple mixins", mixinStandardHelpOptions = true)
-    static class MultiMixinCmd implements Callable<Integer> {
-        @Mixin
-        CommonOptions common;
-
-        @Mixin
-        DatabaseOptions database;
-
-        @Option(names = "--name", description = "Name")
-        String name;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void multipleMixinsWork() {
-        MultiMixinCmd cmd = new MultiMixinCmd();
-        CliTest.of(cmd)
-                .args("--verbose", "--db-host", "prod-db", "--db-port", "3306", "--name", "app")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertThat(cmd.common).isNotNull();
-        assertThat(cmd.common.verbose).isTrue();
-        assertThat(cmd.common.quiet).isFalse();
-        assertEquals("prod-db", cmd.database.host);
-        assertEquals(3306, cmd.database.port);
-        assertEquals("app", cmd.name);
-    }
-
-    @Test
-    void multipleMixinDefaultsApplied() {
-        MultiMixinCmd cmd = new MultiMixinCmd();
-        CliTest.of(cmd)
-                .args()
-                .run()
-                .expectCode(0);
-
-        assertEquals("localhost", cmd.database.host);
-        assertEquals(5432, cmd.database.port);
-        assertEquals("info", cmd.common.logLevel);
-    }
-
-    @Test
-    void multipleMixinsShownInHelp() {
-        CliTest test = CliTest.of(new MultiMixinCmd())
-                .args("--help")
-                .run()
-                .expectCode(0);
-
-        String help = test.stdout();
-        assertThat(help).contains("--verbose");
-        assertThat(help).contains("--quiet");
-        assertThat(help).contains("--log-level");
-        assertThat(help).contains("--name");
-    }
-
-    // ========== Float type support test ==========
-
-    @Command(name = "float-cmd", description = "Test float support", mixinStandardHelpOptions = true)
-    static class FloatCmd implements Callable<Integer> {
-        @Option(names = "--ratio", description = "Ratio")
-        float ratio;
-
-        @Option(names = "--factor", description = "Factor")
-        Float factor;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void floatTypeSupported() {
-        FloatCmd cmd = new FloatCmd();
-        var res = run(cmd, "--ratio", "0.5", "--factor", "1.5");
-
-        assertEquals(0, res.exitCode());
-        assertEquals(0.5f, cmd.ratio, 0.001f);
-        assertEquals(1.5f, cmd.factor, 0.001f);
-    }
-
-    // ========== Enhanced Parameters tests ==========
-
-    @Command(name = "multi-param", description = "Multiple positional params", mixinStandardHelpOptions = true)
-    static class MultiParamCmd implements Callable<Integer> {
-        @Parameters(index = "0", paramLabel = "SOURCE", description = "Source file")
-        String source;
-
-        @Parameters(index = "1", paramLabel = "DEST", description = "Destination file")
-        String dest;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void multiplePositionalParametersByIndex() {
-        MultiParamCmd cmd = new MultiParamCmd();
-        CliTest.of(cmd)
-                .args("input.txt", "output.txt")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals("input.txt", cmd.source);
-        assertEquals("output.txt", cmd.dest);
-    }
-
-    @Test
-    void multiplePositionalParametersMissingSecond() {
-        CliTest.of(new MultiParamCmd())
-                .args("input.txt")
-                .run()
-                .expectCode(2)
-                .expectErr("Missing required parameter");
-    }
-
-    @Test
-    void multiplePositionalParametersMissingFirst() {
-        CliTest.of(new MultiParamCmd())
-                .args()
-                .run()
-                .expectCode(2)
-                .expectErr("Missing required parameter");
-    }
-
-    // ========== Optional parameter with default value ==========
-
-    @Command(name = "opt-default", description = "Optional param with default", mixinStandardHelpOptions = true)
-    static class OptionalDefaultCmd implements Callable<Integer> {
-        @Parameters(index = "0", arity = "0..1", paramLabel = "FILE", description = "Input file", defaultValue = "stdin")
-        String file;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void optionalParameterUsesDefault() {
-        OptionalDefaultCmd cmd = new OptionalDefaultCmd();
-        CliTest.of(cmd)
-                .args()
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals("stdin", cmd.file);
-    }
-
-    @Test
-    void optionalParameterOverridesDefault() {
-        OptionalDefaultCmd cmd = new OptionalDefaultCmd();
-        CliTest.of(cmd)
-                .args("myfile.txt")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals("myfile.txt", cmd.file);
-    }
-
-    // ========== Mixed required and varargs ==========
-
-    @Command(name = "req-varargs", description = "Required + varargs", mixinStandardHelpOptions = true)
-    static class RequiredPlusVarargsCmd implements Callable<Integer> {
-        @Parameters(index = "0", paramLabel = "CMD", description = "Command to run")
-        String command;
-
-        @Parameters(index = "1..*", paramLabel = "ARGS", description = "Arguments")
-        List<String> args;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void requiredPlusVarargsWithArgs() {
-        RequiredPlusVarargsCmd cmd = new RequiredPlusVarargsCmd();
-        CliTest.of(cmd)
-                .args("echo", "hello", "world")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals("echo", cmd.command);
-        assertThat(cmd.args).containsExactly("hello", "world");
-    }
-
-    @Test
-    void requiredPlusVarargsNoArgs() {
-        RequiredPlusVarargsCmd cmd = new RequiredPlusVarargsCmd();
-        CliTest.of(cmd)
-                .args("ls")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals("ls", cmd.command);
-        assertThat(cmd.args).isEmpty();
-    }
-
-    @Test
-    void requiredPlusVarargsMissingRequired() {
-        CliTest.of(new RequiredPlusVarargsCmd())
-                .args()
-                .run()
-                .expectCode(2)
-                .expectErr("Missing required parameter");
-    }
-
-    // ========== Array positional parameter ==========
-
-    @Command(name = "array-param", description = "Array positional", mixinStandardHelpOptions = true)
-    static class ArrayParamCmd implements Callable<Integer> {
-        @Parameters(index = "0..*", paramLabel = "FILES", description = "Files to process")
-        String[] files;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void arrayPositionalParameter() {
-        ArrayParamCmd cmd = new ArrayParamCmd();
-        CliTest.of(cmd)
-                .args("a.txt", "b.txt", "c.txt")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertThat(cmd.files).containsExactly("a.txt", "b.txt", "c.txt");
-    }
-
-    @Test
-    void arrayPositionalParameterEmpty() {
-        ArrayParamCmd cmd = new ArrayParamCmd();
-        CliTest.of(cmd)
-                .args()
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertThat(cmd.files).isEmpty();
-    }
-
-    // ========== ParamLabel in error message ==========
-
-    @Command(name = "label-error", description = "Test paramLabel in errors", mixinStandardHelpOptions = true)
-    static class ParamLabelErrorCmd implements Callable<Integer> {
-        @Parameters(index = "0", paramLabel = "CONFIG_FILE", description = "Configuration file")
-        String config;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void paramLabelUsedInErrorMessage() {
-        CliTest test = CliTest.of(new ParamLabelErrorCmd())
-                .args()
-                .run()
-                .expectCode(2);
-
-        assertThat(test.stderr()).contains("CONFIG_FILE");
-    }
-
-    // ========== Custom type converter tests (option-level) ==========
-
-    static class PointConverter implements TypeConverter<java.awt.Point> {
-        @Override
-        public java.awt.Point convert(String value) {
-            String[] parts = value.split(",");
-            return new java.awt.Point(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-        }
-    }
-
-    @Command(name = "custom-converter", description = "Test custom converter", mixinStandardHelpOptions = true)
-    static class CustomConverterCmd implements Callable<Integer> {
-        @Option(names = "--point", description = "Point as x,y", converter = PointConverter.class)
-        java.awt.Point point;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void customConverterOnOptionWorks() {
-        CustomConverterCmd cmd = new CustomConverterCmd();
-        CliTest.of(cmd)
-                .args("--point", "10,20")
-                .run()
-                .expectCode(0)
-                .expectErrEmpty();
-
-        assertEquals(10, cmd.point.x);
-        assertEquals(20, cmd.point.y);
-    }
-
-    // ========== Builder API tests with global converters ==========
-
-    static class DimensionConverter implements TypeConverter<Dimension> {
-        @Override
-        public java.awt.Dimension convert(String value) {
-            String[] parts = value.split("x");
-            return new java.awt.Dimension(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-        }
-    }
-
-    @Command(name = "builder-cmd", description = "Test builder API", mixinStandardHelpOptions = true)
-    static class BuilderCmd implements Callable<Integer> {
-        @Option(names = "--dim", description = "Dimension as WxH")
-        java.awt.Dimension dimension;
-
-        @Override
-        public Integer call() {
-            return 0;
-        }
-    }
-
-    @Test
-    void builderApiWithCustomConverter() {
-        BuilderCmd cmd = new BuilderCmd();
-        var res = MiniCli.builder()
-                .registerType(java.awt.Dimension.class, new DimensionConverter())
-                .runCaptured(cmd, "--dim", "800x600");
-
-        assertEquals(0, res.exitCode());
-        assertEquals(800, cmd.dimension.width);
-        assertEquals(600, cmd.dimension.height);
-    }
-
-    @Test
-    void builderApiWithMultipleConverters() {
-        @Command(name = "multi-custom", description = "Multiple custom types", mixinStandardHelpOptions = true)
-        class MultiCustomCmd implements Callable<Integer> {
-            @Option(names = "--dim", description = "Dimension")
-            java.awt.Dimension dim;
-
-            @Option(names = "--point", description = "Point")
-            java.awt.Point point;
-
-            @Override
-            public Integer call() {
-                return 0;
-            }
-        }
-
-        MultiCustomCmd cmd = new MultiCustomCmd();
-        var res = MiniCli.builder()
-                .registerType(java.awt.Dimension.class, new DimensionConverter())
-                .registerType(java.awt.Point.class, new PointConverter())
-                .runCaptured(cmd, "--dim", "1024x768", "--point", "50,100");
-
-        assertEquals(0, res.exitCode());
-        assertEquals(1024, cmd.dim.width);
-        assertEquals(768, cmd.dim.height);
-        assertEquals(50, cmd.point.x);
-        assertEquals(100, cmd.point.y);
-    }
-
-    @Test
     void customSynopsisAndHeaderWork() {
         @Command(
                 name = "custom-help",
@@ -2810,5 +2268,71 @@ class MiniCliTest {
             .run()
             .expectCode(0);
         assertThat(cmd.mode).isEqualTo("safe");
+    }
+
+    @Test
+    void builtInDurationConverterParsesHumanMillis() {
+        CustomTypeCmd cmd = new CustomTypeCmd();
+        var res = run(cmd, "--duration", "400ms");
+
+        assertEquals(0, res.exitCode());
+        assertEquals(Duration.ofMillis(400), cmd.duration);
+    }
+
+    @Test
+    void builtInDurationConverterParsesHumanFractionalSeconds() {
+        CustomTypeCmd cmd = new CustomTypeCmd();
+        var res = run(cmd, "--duration", "4.5s");
+
+        assertEquals(0, res.exitCode());
+        assertEquals(Duration.ofMillis(4500), cmd.duration);
+    }
+
+    @Test
+    void builtInDurationConverterParsesIso8601() {
+        CustomTypeCmd cmd = new CustomTypeCmd();
+        var res = run(cmd, "--duration", "PT1H30M");
+
+        assertEquals(0, res.exitCode());
+        assertEquals(Duration.ofHours(1).plusMinutes(30), cmd.duration);
+    }
+
+    @Test
+    void builtInDurationConverterParsesNegative() {
+        CustomTypeCmd cmd = new CustomTypeCmd();
+        var res = run(cmd, "--duration", "-1.25s");
+
+        assertEquals(0, res.exitCode());
+        assertEquals(Duration.ofMillis(-1250), cmd.duration);
+    }
+
+    @Test
+    void builtInDurationConverterRejectsMissingUnit() {
+        CliTest.of(new CustomTypeCmd())
+                .args("--duration", "10")
+                .run()
+                .expectCode(2)
+                .expectErr("Invalid value");
+    }
+
+    @Test
+    void unsupportedTypeWithoutConverterReturns2() {
+        // java.awt.Point is intentionally unsupported unless a custom converter is registered.
+        PointCmd cmd = new PointCmd();
+        var res = run(cmd, "--point", "1,2");
+
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Unsupported field type");
+    }
+
+    @Command(name = "point-cmd", description = "Test Point type", mixinStandardHelpOptions = true)
+    static class PointCmd implements Callable<Integer> {
+        @Option(names = "--point", description = "Point")
+        java.awt.Point point;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
     }
 }

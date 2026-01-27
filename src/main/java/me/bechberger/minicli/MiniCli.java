@@ -9,7 +9,10 @@ import java.io.PrintStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -529,62 +532,91 @@ public final class MiniCli {
         m.put(boolean.class, (TypeConverter<Boolean>) Boolean::parseBoolean);
         m.put(Boolean.class, (TypeConverter<Boolean>) Boolean::parseBoolean);
         m.put(Path.class, (TypeConverter<Path>) Path::of);
+        m.put(Duration.class, (TypeConverter<Duration>) MiniCli::parseDuration);
         BUILTIN_CONVERTERS = Collections.unmodifiableMap(m);
     }
 
-    private static Object convert(String raw, Class<?> type, String fieldName, Option opt,
-                                  Map<Class<?>, TypeConverter<?>> converters) throws UsageEx {
+    /**
+     * Parse duration from either ISO-8601 (e.g. "PT1H30M") or a short human format like
+     * "400ms", "4.5s", "2m", "1h", "1d" (case-insensitive). Fractional values are supported.
+     */
+    static Duration parseDuration(String raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException("Duration cannot be null");
+        }
+        String s = raw.trim();
+        if (s.isEmpty()) {
+            throw new IllegalArgumentException("Duration cannot be empty");
+        }
+
+        // Prefer the JDK parser first (keeps full ISO-8601 support).
         try {
-            // Option-specific converter
-            if (opt != null && opt.converter() != TypeConverter.class) {
-                @SuppressWarnings("unchecked")
-                var converter = (TypeConverter<Object>) opt.converter().getDeclaredConstructor().newInstance();
-                return converter.convert(raw);
-            }
-
-            // Global converters
-            if (converters.get(type) instanceof TypeConverter<?> custom) {
-                return custom.convert(raw);
-            }
-
-            // Built-in types
-            if (BUILTIN_CONVERTERS.get(type) instanceof TypeConverter<?> builtin) {
-                return builtin.convert(raw);
-            }
-
-            // Enum types
-            if (type.isEnum()) {
-                return convertEnum(type, raw);
-            }
-        } catch (Exception e) {
-            throw new UsageEx(null, "Invalid value for " + fieldName + ": " + raw);
+            return Duration.parse(s);
+        } catch (Exception ignored) {
+            // fall through
         }
 
-        throw new UsageEx(null, "Unsupported field type: " + type.getName());
-    }
+        // Simple human form: <number><unit>
+        // number: 123 | 123.45 | .5 (we'll normalize)
+        // unit: ns, us/µs, ms, s, m, h, d
+        String lower = s.toLowerCase(Locale.ROOT);
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object convertEnum(Class<?> enumType, String raw) {
-        Class<? extends Enum> enumClass = (Class<? extends Enum>) enumType;
-        Object[] constants = enumClass.getEnumConstants();
-        for (Object c : constants) {
-            Enum<?> e = (Enum<?>) c;
-            if (e.name().equalsIgnoreCase(raw)) return e;
+        int unitStart = -1;
+        for (int i = 0; i < lower.length(); i++) {
+            char c = lower.charAt(i);
+            if ((c >= 'a' && c <= 'z') || c == 'µ') {
+                unitStart = i;
+                break;
+            }
         }
-        throw new IllegalArgumentException("Invalid enum value: " + raw);
-    }
+        if (unitStart <= 0 || unitStart >= lower.length()) {
+            throw new IllegalArgumentException("Invalid duration: " + raw);
+        }
 
-    static String enumCandidates(Class<?> type) {
-        if (!type.isEnum()) {
-            return "";
+        String numberPart = lower.substring(0, unitStart).trim();
+        String unitPart = lower.substring(unitStart).trim();
+        if (numberPart.isEmpty() || unitPart.isEmpty()) {
+            throw new IllegalArgumentException("Invalid duration: " + raw);
         }
-        StringBuilder sb = new StringBuilder();
-        Object[] constants = type.getEnumConstants();
-        for (int i = 0; i < constants.length; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(((Enum<?>) constants[i]).name().toLowerCase(Locale.ROOT));
+
+        // Accept leading ".5" by normalizing to "0.5" for BigDecimal.
+        if (numberPart.startsWith(".")) numberPart = "0" + numberPart;
+        if (numberPart.startsWith("-.")) numberPart = "-0" + numberPart.substring(1);
+        if (numberPart.startsWith("+.")) numberPart = "+0" + numberPart.substring(1);
+
+        BigDecimal value = new BigDecimal(numberPart);
+
+        // Normalize microsecond unit spelling.
+        if ("µs".equals(unitPart)) unitPart = "us";
+
+        BigDecimal nanosPerUnit;
+        switch (unitPart) {
+            case "ns" -> nanosPerUnit = BigDecimal.ONE;
+            case "us" -> nanosPerUnit = BigDecimal.valueOf(1_000L);
+            case "ms" -> nanosPerUnit = BigDecimal.valueOf(1_000_000L);
+            case "s" -> nanosPerUnit = BigDecimal.valueOf(1_000_000_000L);
+            case "m" -> nanosPerUnit = BigDecimal.valueOf(60_000_000_000L);
+            case "h" -> nanosPerUnit = BigDecimal.valueOf(3_600_000_000_000L);
+            case "d" -> nanosPerUnit = BigDecimal.valueOf(86_400_000_000_000L);
+            default -> throw new IllegalArgumentException("Invalid duration unit: " + unitPart);
         }
-        return sb.toString();
+
+        BigDecimal totalNanos = value.multiply(nanosPerUnit);
+
+        // Convert to seconds + nanos (floor for seconds; nanos remainder always positive).
+        BigDecimal[] divRem = totalNanos.divideAndRemainder(BigDecimal.valueOf(1_000_000_000L));
+        BigDecimal secondsBD = divRem[0];
+        BigDecimal nanosBD = divRem[1];
+
+        // Ensure remainder is in [0, 1e9) by adjusting when negative.
+        if (nanosBD.signum() < 0) {
+            secondsBD = secondsBD.subtract(BigDecimal.ONE);
+            nanosBD = nanosBD.add(BigDecimal.valueOf(1_000_000_000L));
+        }
+
+        long seconds = secondsBD.longValueExact();
+        int nanos = nanosBD.setScale(0, RoundingMode.UNNECESSARY).intValueExact();
+        return Duration.ofSeconds(seconds, nanos);
     }
 
     private static int invoke(Object cmd) throws Exception {
@@ -672,4 +704,80 @@ public final class MiniCli {
     }
 
     private static final ThreadLocal<UsageContext> USAGE_CONTEXT = new ThreadLocal<>();
+
+    /**
+     * Converts a single string value to the requested Java type.
+     *
+     * <p>Resolution order:</p>
+     * <ol>
+     *   <li>Custom converters provided by the Builder / run overload</li>
+     *   <li>Built-in converters (primitives, boxed types, Path, Duration, ...)</li>
+     *   <li>Enum types (case-insensitive)</li>
+     * </ol>
+     */
+    private static Object convert(String value,
+                                  Class<?> type,
+                                  String fieldName,
+                                  Option opt,
+                                  Map<Class<?>, TypeConverter<?>> converters) throws UsageEx {
+        // Important: don't trim globally; some options might intentionally accept leading/trailing spaces.
+        String raw = value;
+        try {
+            // 1) Custom converter
+            TypeConverter<?> custom = converters.get(type);
+            if (custom != null) {
+                return custom.convert(raw);
+            }
+
+            // 2) Built-in converter
+            TypeConverter<?> builtin = BUILTIN_CONVERTERS.get(type);
+            if (builtin != null) {
+                return builtin.convert(raw);
+            }
+
+            // 3) Enums (case-insensitive)
+            if (type.isEnum()) {
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                Class<? extends Enum> e = (Class<? extends Enum>) type;
+                for (Enum<?> c : e.getEnumConstants()) {
+                    if (c.name().equalsIgnoreCase(raw)) {
+                        return c;
+                    }
+                }
+                // Fall back to default enum parser for the best exception message
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                Enum<?> parsed = Enum.valueOf((Class) e, raw.toUpperCase(Locale.ROOT));
+                return parsed;
+            }
+
+            throw new UsageEx(null, "Unsupported field type: " + type.getName());
+        } catch (UsageEx e) {
+            throw e;
+        } catch (Exception e) {
+            // Re-wrap conversion errors as UsageEx so callers consistently return exit code 2.
+            String displayName = preferredOptionName(opt);
+            if (opt == null) {
+                displayName = "<" + fieldName + ">";
+            }
+            throw new UsageEx(null, "Invalid value for " + displayName + ": " + raw);
+        }
+    }
+
+    /**
+     * Used by help placeholder ${COMPLETION-CANDIDATES}.
+     */
+    static String enumCandidates(Class<?> type) {
+        if (type == null || !type.isEnum()) {
+            return "";
+        }
+        Object[] constants = type.getEnumConstants();
+        if (constants == null || constants.length == 0) {
+            return "";
+        }
+        StringJoiner joiner = new StringJoiner(",");
+        for (Object c : constants) {
+            joiner.add(String.valueOf(c));
+        }
+        return joiner.toString();
+    }
 }

@@ -254,8 +254,7 @@ class VersionBumper:
             changelog_entry = f"Release {version}\n\nSee [CHANGELOG.md](https://github.com/parttimenerd/minicli/blob/main/CHANGELOG.md) for details."
 
         # Format release notes
-        release_notes = f"""# Release {version}
-
+        release_notes = f"""
 {changelog_entry}
 
 ## Installation
