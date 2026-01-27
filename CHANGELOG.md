@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.3] - 2026-01-27
+
+### Fixed
+- Hopefully fixed default value handling
+
 ## [0.1.2] - 2026-01-27
 
 ### Added

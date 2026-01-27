@@ -81,7 +81,7 @@ Add the library as a dependency in your project:
 <dependency>
   <groupId>me.bechberger.jfr</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.2</version>
+  <version>0.1.3</version>
 </dependency>
 ```
 
