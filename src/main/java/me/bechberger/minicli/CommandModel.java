@@ -36,6 +36,8 @@ final class CommandModel {
             }
         }
 
+        // Spec fields are initialized by MiniCli once it knows the runtime streams.
+
         Map<String, MiniCli.OptionMeta> optionsByName = new LinkedHashMap<>();
         Map<Field, MiniCli.OptionMeta> optionByField = new LinkedHashMap<>();
         List<MiniCli.OptionMeta> options = new ArrayList<>();

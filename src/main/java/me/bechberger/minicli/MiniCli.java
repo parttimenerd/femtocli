@@ -71,6 +71,10 @@ public final class MiniCli {
     public static Builder builder() { return new Builder(); }
     private MiniCli() {}
 
+    /**
+     * Run the CLI with the given root command object and arguments,
+     * and use the passed output and error streams for MiniCli output.
+     */
     public static int run(Object root, PrintStream out, PrintStream err, String[] args) {
         return execute(root, out, err, args, Map.of(), new CommandConfig());
     }
@@ -78,6 +82,10 @@ public final class MiniCli {
     public static int run(Object root, PrintStream out, PrintStream err, String[] args,
                           Map<Class<?>, TypeConverter<?>> converters) {
         return execute(root, out, err, args, converters, new CommandConfig());
+    }
+
+    public static RunResult runCaptured(Object root, String[] args) {
+        return builder().runCaptured(root, args);
     }
 
     private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
@@ -134,6 +142,10 @@ public final class MiniCli {
             }
 
             USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig));
+
+            CommandModel model = CommandModel.of(cmd);
+            injectSpec(model, out, err, List.copyOf(commandPath), commandConfig);
+
             parseInto(cmd, tokens, converters);
             return invoke(cmd);
 
@@ -177,6 +189,9 @@ public final class MiniCli {
     private static boolean isHelp(String t) { return "--help".equals(t) || "-h".equals(t); }
     private static boolean isVersion(String t) { return "--version".equals(t) || "-V".equals(t); }
 
+    /**
+     * Use {@link Spec#usage()} instead
+     */
     public static void usage(Object cmd, PrintStream out) {
         UsageContext ctx = USAGE_CONTEXT.get();
         if (ctx != null) {
@@ -201,6 +216,12 @@ public final class MiniCli {
     private static void parseInto(Object cmd, Deque<String> tokens,
                                   Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         var model = CommandModel.of(cmd);
+        UsageContext ctx = USAGE_CONTEXT.get();
+        if (ctx != null) {
+            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig);
+        } else {
+            injectSpec(model, System.out, System.err, List.of(commandName(cmd)), new CommandConfig());
+        }
 
         // Parse tokens
         Set<Field> seenFields = new HashSet<>();
@@ -792,5 +813,23 @@ public final class MiniCli {
             joiner.add(String.valueOf(c));
         }
         return joiner.toString();
+    }
+
+    private static void injectSpec(CommandModel model,
+                                   PrintStream out,
+                                   PrintStream err,
+                                   List<String> commandPath,
+                                   CommandConfig commandConfig) throws Exception {
+        me.bechberger.minicli.Spec spec = new me.bechberger.minicli.Spec(model.cmd, out, err, commandPath, commandConfig);
+        for (Field f : allFields(model.cmd.getClass())) {
+            f.setAccessible(true);
+            if (!me.bechberger.minicli.Spec.class.isAssignableFrom(f.getType())) {
+                continue;
+            }
+            if (f.get(model.cmd) != null) {
+                continue;
+            }
+            f.set(model.cmd, spec);
+        }
     }
 }
