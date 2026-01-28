@@ -10,6 +10,8 @@ While it's small, it should still cover most of the common use cases.
 
 _It's currently in early development, so expect some rough edges._
 
+Requires Java 17 or higher.
+
 Features
 --------
 

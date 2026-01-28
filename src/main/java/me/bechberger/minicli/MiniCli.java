@@ -162,6 +162,8 @@ public final class MiniCli {
             err.println("Error: " + e.getMessage());
             usage(target, out);
             return 2;
+        } catch (FieldIsFinalException e) {
+            throw e;
         } catch (Exception e) {
             err.println("Error: " + e.getMessage());
             return 1;

@@ -4,6 +4,7 @@ import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Mixin;
 import me.bechberger.minicli.annotations.Option;
 import me.bechberger.minicli.annotations.Parameters;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -17,6 +18,7 @@ import java.util.concurrent.Callable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MiniCliTest {
 
@@ -2393,5 +2395,59 @@ class MiniCliTest {
                 .runCaptured(new SomeMainCommand(), "defaultTest");
         assertEquals(0, res.exitCode());
         assertEquals("10", res.out().trim());
+    }
+
+    static abstract class BaseCommand implements Callable<Integer> {
+        @Option(names = "--base-option", description = "An option in the base class")
+        String baseOption;
+
+        @Override
+        public Integer call() {
+            if (!returnOption().equals("implValue")) {
+                throw new IllegalStateException("implOption not set correctly");
+            }
+            return 0;
+        }
+
+        abstract String returnOption();
+    }
+
+    @Command(name = "command-impl", description = "Command that extends a base class", mixinStandardHelpOptions = true)
+    static class CommandImpl extends BaseCommand {
+        @Option(names = "--impl-option", description = "An option in the implementation class")
+        String implOption;
+
+        String returnOption() {
+            return implOption;
+        }
+    }
+
+    @Test
+    public void inheritedOptionsAreParsedCorrectly() {
+        CommandImpl cmd = new CommandImpl();
+        var res = MiniCli.builder()
+                .runCaptured(cmd, "--base-option", "baseValue", "--impl-option", "implValue");
+
+        assertEquals(0, res.exitCode());
+        assertEquals("baseValue", cmd.baseOption);
+        assertEquals("implValue", cmd.implOption);
+        assertEquals("implValue", ((BaseCommand)cmd).returnOption());
+    }
+
+    @Command(name = "final field")
+    static class FinalFieldCmd implements Callable<Integer> {
+        @Option(names = "--final-opt", description = "A final field option")
+        final String finalOpt = "defaultFinal";
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    @Test
+    public void finalFieldOptionIsHandled() {
+        assertThrows(FieldIsFinalException.class, () -> MiniCli.builder()
+                .runCaptured(new FinalFieldCmd(), "--final-opt", "newValue"));
     }
 }
