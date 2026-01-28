@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## [0.1.7] - 2026-01-28
+
+### Added
 - Support Java 17
 
 ## [0.1.6] - 2026-01-27
