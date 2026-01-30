@@ -8,11 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+- `Command#hidden` to hide commands from help outpu in parent commands
+- `Option#hidden` to hide options from help output in commands
+- `Command#footer` to add custom footers to help output in commands
 
 ## [0.1.7] - 2026-01-28
 

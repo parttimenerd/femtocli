@@ -9,23 +9,6 @@ import me.bechberger.minicli.Verifier;
 
 /**
  * Marks a field as positional parameters.
- *
- * <p>Index formats:
- * <ul>
- *   <li>{@code "0"} - first positional parameter</li>
- *   <li>{@code "1"} - second positional parameter</li>
- *   <li>{@code "0..1"} - first two positional parameters</li>
- *   <li>{@code "2..*"} - third and all remaining positional parameters</li>
- *   <li>{@code "0..*"} - all positional parameters (varargs)</li>
- * </ul>
- *
- * <p>Arity formats:
- * <ul>
- *   <li>{@code ""} (empty) - required (exactly 1 value expected for single index)</li>
- *   <li>{@code "0..1"} - optional (0 or 1 value)</li>
- *   <li>{@code "1..*"} - at least 1 value</li>
- *   <li>{@code "0..*"} - any number of values</li>
- * </ul>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
@@ -52,7 +35,7 @@ public @interface Parameters {
     String paramLabel() default "";
 
     /** Default value as string (applied if parameter is optional and not provided). */
-    String defaultValue() default "";
+    String defaultValue() default "__NO_DEFAULT_VALUE__";
 
     /**
      * Custom converter method.

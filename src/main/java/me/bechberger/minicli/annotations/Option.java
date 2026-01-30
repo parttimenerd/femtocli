@@ -38,7 +38,7 @@ public @interface Option {
     boolean required() default false;
 
     /** Default value as string (used for ${DEFAULT-VALUE} placeholder and to set field if not provided). */
-    String defaultValue() default "";
+    String defaultValue() default "__NO_DEFAULT_VALUE__";
 
     /**
      * Delimiter for splitting values into array/list elements.
@@ -112,4 +112,10 @@ public @interface Option {
      * <p>The method must accept a single argument of the option's target type and return void.</p>
      */
     String verifierMethod() default "";
+
+    /**
+     * Whether this option should be hidden from the help output.
+     * Useful for advanced or deprecated options.
+     */
+    boolean hidden() default false;
 }

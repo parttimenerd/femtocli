@@ -91,7 +91,7 @@ class SpecInjectionTest {
     }
 
     @Test
-    void specInjectionIsSafeUnderSynchronizedConcurrentRuns() throws Exception {
+    void specInjectionIsSafeUnderSynchronizedConcurrentRuns() {
         @Command(name = "spec-sync", description = "Spec sync", mixinStandardHelpOptions = true)
         class SpecSyncCmd implements Runnable {
             Spec spec;

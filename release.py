@@ -400,6 +400,8 @@ Download `minicli.jar` from the assets below.
             ['mvn', 'clean', 'package'],
             "Building package"
         )
+        # Enforce jar size after building the normal artifact.
+        self._enforce_jar_size_limits()
 
     def _copy_repo_to_temp(self) -> Path:
         """Copy the repository to a temporary folder for the minimal build."""
@@ -455,6 +457,9 @@ Download `minicli.jar` from the assets below.
             dest = out_target / 'minicli-minimal.jar'
             shutil.copy2(chosen, dest)
             print(f"✓ Wrote minimal jar to {dest}")
+
+            # Enforce jar size after writing the minimal artifact.
+            self._enforce_jar_size_limits()
 
         finally:
             shutil.rmtree(tmp_repo.parent, ignore_errors=True)
@@ -576,6 +581,29 @@ Download `minicli.jar` from the assets below.
                 )
 
         pom_path.write_text(content)
+
+    # Size limits (in bytes) for guarding against accidental bloat.
+    # Note: thresholds are in KiB (1024 bytes).
+    _NORMAL_JAR_MAX_BYTES = 49 * 1024
+    _MINIMAL_JAR_MAX_BYTES = 39 * 1024
+
+    def _enforce_jar_size_limits(self):
+        """Fail fast if produced jars exceed expected size limits."""
+        def check(path: Path, max_bytes: int, label: str):
+            if not path.exists():
+                # Only enforce when the artifact is present; build steps decide what to produce.
+                return
+            size = path.resolve().stat().st_size
+            if size > max_bytes:
+                size_kib = size / 1024.0
+                max_kib = max_bytes / 1024.0
+                raise RuntimeError(
+                    f"{label} is too large: {size} bytes ({size_kib:.1f} KiB) > "
+                    f"{max_bytes} bytes ({max_kib:.1f} KiB) at {path}"
+                )
+
+        check(self.project_root / 'target' / 'minicli.jar', self._NORMAL_JAR_MAX_BYTES, 'Normal build JAR (minicli.jar)')
+        check(self.project_root / 'target' / 'minicli-minimal.jar', self._MINIMAL_JAR_MAX_BYTES, 'Minimal build JAR (minicli-minimal.jar)')
 
 def main():
     parser = argparse.ArgumentParser(

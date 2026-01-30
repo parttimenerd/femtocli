@@ -25,7 +25,8 @@ Features
 - Automatic `-h/--help` and `-V/--version` flags
 - End-of-options marker (`--`)
 - Description placeholders (`${DEFAULT-VALUE}`, `${COMPLETION-CANDIDATES}`)
-- Custom `header` and `customSynopsis` in help output
+- Custom `header`, `customSynopsis`, and `footer` in help output
+- Ability to hide commands and options from help output
 
 Non-Goals
 ---------

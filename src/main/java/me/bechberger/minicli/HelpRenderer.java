@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
+import static me.bechberger.minicli.MiniCli.NO_DEFAULT_VALUE;
+
 final class HelpRenderer {
     private static final int MIN_LABEL_WIDTH = 12;  // Minimum width for labels
     private static final int MAX_LINE_WIDTH = 80;  // Maximum line width for wrapping
@@ -30,6 +32,7 @@ final class HelpRenderer {
         Command annotation = cmd.getClass().getAnnotation(Command.class);
         boolean hasSubcommandClasses = annotation != null && annotation.subcommands().length > 0;
         boolean hasSubcommandMethods = hasSubcommandMethods(cmd.getClass());
+        boolean hasSubcommands = hasSubcommandClasses || hasSubcommandMethods;
 
         boolean showStandardHelpOptions = commandConfig.effectiveMixinStandardHelpOptions(annotation);
 
@@ -37,80 +40,64 @@ final class HelpRenderer {
         try {
             model = CommandModel.of(cmd);
         } catch (Exception e) {
-            // Fall back to previous behavior if model creation fails for some reason.
             throw new RuntimeException(e);
         }
 
-        renderHeader(annotation, out);
-        renderSynopsis(annotation, commandPath, showStandardHelpOptions,
-                hasSubcommandClasses || hasSubcommandMethods, model.options, model.parameters, out);
+        printLines(out, annotation == null ? null : annotation.header());
 
-        if (commandConfig.effectiveEmptyLineAfterUsage(annotation)) {
-            out.println();
+        if (!printLines(out, annotation == null ? null : annotation.customSynopsis())) {
+            renderSynopsis(commandPath, showStandardHelpOptions, hasSubcommands, model.options, model.parameters, out);
         }
 
-        renderDescription(annotation, out);
+        if (commandConfig.effectiveEmptyLineAfterUsage(annotation)) out.println();
 
-        if (commandConfig.effectiveEmptyLineAfterDescription(annotation)) {
-            out.println();
-        }
-
-        renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out);
-        renderSubcommands(cmd.getClass(), hasSubcommandClasses, hasSubcommandMethods, out);
-    }
-
-    private static void renderHeader(Command annotation, PrintStream out) {
-        if (annotation != null) {
-            for (String line : annotation.header()) out.println(line);
-        }
-    }
-
-    private static void renderDescription(Command annotation, PrintStream out) {
         if (annotation != null && annotation.description().length > 0) {
             out.println(annotation.description()[0]);
         }
+
+        if (commandConfig.effectiveEmptyLineAfterDescription(annotation)) out.println();
+
+        renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out);
+        renderSubcommands(cmd.getClass(), hasSubcommandClasses, hasSubcommandMethods, out);
+        renderFooter(annotation, out);
     }
 
-    private static void renderSynopsis(Command annotation, String displayName, boolean showStandardHelpOptions,
+    /** Print all lines; returns true if at least one line was printed. */
+    private static boolean printLines(PrintStream out, String[] lines) {
+        if (lines == null || lines.length == 0) return false;
+        for (String line : lines) out.println(line);
+        return true;
+    }
+
+    private static void renderSynopsis(String displayName, boolean showStandardHelpOptions,
                                        boolean hasSubcommands,
                                        List<MiniCli.OptionMeta> options, List<MiniCli.ParamInfo> parameters, PrintStream out) {
-        if (annotation != null && annotation.customSynopsis().length > 0) {
-            for (String s : annotation.customSynopsis()) out.println(s);
-            return;
-        }
-
-        StringBuilder synopsis = new StringBuilder();
-        synopsis.append("Usage: ").append(displayName);
-        if (showStandardHelpOptions) {
-            synopsis.append(" [-hV]");
-        }
+        StringBuilder synopsis = new StringBuilder("Usage: ").append(displayName);
+        if (showStandardHelpOptions) synopsis.append(" [-hV]");
 
         for (MiniCli.OptionMeta opt : options) {
-            String optName = opt.opt.names()[opt.opt.names().length - 1];
-            if (!MiniCli.isBooleanType(opt.field.getType())) {
+            String optName = last(opt.opt.names());
+            boolean isBoolean = MiniCli.isBooleanType(opt.field.getType());
+
+            if (!isBoolean) {
                 String paramLabel = getOptionParamLabel(opt);
-                if (opt.opt.required()) {
-                    synopsis.append(" ").append(optName).append("=").append(paramLabel);
-                } else {
-                    synopsis.append(" [").append(optName).append("=").append(paramLabel).append("]");
-                }
+                synopsis.append(opt.opt.required() ? " " : " [")
+                        .append(optName).append("=").append(paramLabel)
+                        .append(opt.opt.required() ? "" : "]");
             } else if (!opt.opt.required()) {
                 synopsis.append(" [").append(optName).append("]");
             }
         }
 
-        if (hasSubcommands) {
-            synopsis.append(" [COMMAND]");
-        }
+        if (hasSubcommands) synopsis.append(" [COMMAND]");
+        for (MiniCli.ParamInfo param : parameters) synopsis.append(" ").append(getLabel(param));
 
-        for (MiniCli.ParamInfo param : parameters) {
-            String label = getLabel(param);
-            synopsis.append(" ").append(label);
-        }
-
-        String synopsisStr = synopsis.toString();
         int usageIndent = "Usage: ".length() + displayName.length() + 1;
-        out.println(wrapTextBlock(synopsisStr, 80, usageIndent));
+        out.println(wrapTextBlock(synopsis.toString(), 80, usageIndent));
+    }
+
+    private static <T> T last(T[] a) {
+        return a[a.length - 1];
     }
 
     private static String getLabel(MiniCli.ParamInfo param) {
@@ -141,13 +128,7 @@ final class HelpRenderer {
                                                    CommandConfig commandConfig,
                                                    Command annotation,
                                                    PrintStream out) {
-        List<HelpEntry> entries = getHelpEntries(parameters);
-
-        List<MiniCli.OptionMeta> sortedOptions = new ArrayList<>(options);
-        sortedOptions.sort(Comparator.comparing(o -> {
-            String[] names = o.opt.names();
-            return names[names.length - 1].replaceFirst("^-+", "").toLowerCase();
-        }));
+        List<HelpEntry> entries = new ArrayList<>(getHelpEntries(parameters));
 
         List<HelpEntry> optionEntries = new ArrayList<>();
         if (showStandardHelpOptions) {
@@ -155,33 +136,21 @@ final class HelpRenderer {
             optionEntries.add(new HelpEntry("-V, --version", "Print version information and exit.", true));
         }
 
-        for (MiniCli.OptionMeta opt : sortedOptions) {
+        for (MiniCli.OptionMeta opt : options) {
+            if (opt.opt.hidden()) continue;
+
             String names = formatOptionNames(opt);
-
-            String description = expandPlaceholders(
-                    opt.opt.description(),
-                    opt.opt.defaultValue(),
-                    opt.field.getType()
-            );
-
+            String description = expandPlaceholders(opt.opt.description(), opt.opt.defaultValue(), opt.field.getType());
             description = maybeAppendDefaultValue(description, opt.opt, commandConfig, annotation);
+            if (opt.opt.required()) description += " (required)";
 
-            if (opt.opt.required()) {
-                description += " (required)";
-            }
-            boolean hasShortOption = hasShortOption(opt.opt.names());
-            optionEntries.add(new HelpEntry(names, description, hasShortOption));
+            optionEntries.add(new HelpEntry(names, description, hasShortOption(opt.opt.names())));
         }
 
         optionEntries.sort(Comparator.comparing(e -> e.label.replaceFirst("^\\s*-+", "").toLowerCase()));
         entries.addAll(optionEntries);
 
-        int maxLabelWidth = MIN_LABEL_WIDTH;
-        for (HelpEntry e : entries) {
-            if (e.label.length() > maxLabelWidth) maxLabelWidth = e.label.length();
-        }
-        int labelColumnWidth = Math.max(maxLabelWidth, MIN_LABEL_WIDTH);
-
+        int labelColumnWidth = Math.max(MIN_LABEL_WIDTH, entries.stream().mapToInt(e -> e.label.length()).max().orElse(MIN_LABEL_WIDTH));
         for (HelpEntry entry : entries) {
             printAlignedEntry(out, entry.label, entry.description, labelColumnWidth, entry.hasShortOption);
         }
@@ -246,7 +215,7 @@ final class HelpRenderer {
         String indent = " ".repeat(Math.max(0, subsequentIndent));
         List<String> lines = wrapLines(text, maxWidth);
         if (lines.isEmpty()) return "";
-        StringBuilder sb = new StringBuilder(lines.getFirst());
+        StringBuilder sb = new StringBuilder(lines.get(0));
         for (int i = 1; i < lines.size(); i++) {
             sb.append("\n").append(indent).append(lines.get(i));
         }
@@ -285,27 +254,20 @@ final class HelpRenderer {
 
     private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommandClasses,
                                           boolean hasSubcommandMethods, PrintStream out) {
-        if (!hasSubcommandClasses && !hasSubcommandMethods) {
-            return;
-        }
+        if (!hasSubcommandClasses && !hasSubcommandMethods) return;
+
+        List<String[]> entries = new ArrayList<>();
+        if (hasSubcommandClasses) collectSubs(cmdClass, "", entries);
+        collectMethodSubs(cmdClass, entries);
+        if (entries.isEmpty()) return;
 
         out.println("Commands:");
-        List<String[]> entries = new ArrayList<>();
-
-        if (hasSubcommandClasses) {
-            collectSubs(cmdClass, "", entries);
-        }
-        collectMethodSubs(cmdClass, entries);
 
         int maxNameLength = 0;
-        for (String[] entry : entries) {
-            if (entry[0].length() > maxNameLength) maxNameLength = entry[0].length();
-        }
+        for (String[] entry : entries) maxNameLength = Math.max(maxNameLength, entry[0].length());
 
         for (String[] entry : entries) {
-            if (!entry[0].isEmpty()) {
-                out.printf("  %-" + (maxNameLength + 2) + "s%s%n", entry[0], entry[1]);
-            }
+            if (!entry[0].isEmpty()) out.printf("  %-" + (maxNameLength + 2) + "s%s%n", entry[0], entry[1]);
         }
     }
 
@@ -319,7 +281,7 @@ final class HelpRenderer {
     private static void collectMethodSubs(Class<?> cmdClass, List<String[]> entries) {
         for (Method method : cmdClass.getDeclaredMethods()) {
             Command cmdAnnotation = method.getAnnotation(Command.class);
-            if (cmdAnnotation != null) {
+            if (cmdAnnotation != null && !cmdAnnotation.hidden()) {
                 String description = cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : "";
                 entries.add(new String[]{cmdAnnotation.name(), description});
             }
@@ -328,13 +290,17 @@ final class HelpRenderer {
 
     private static String expandPlaceholders(String description, String defaultValue, Class<?> type) {
         return description
-                .replace("${DEFAULT-VALUE}", defaultValue.isEmpty() ? "none" : defaultValue)
+                .replace("${DEFAULT-VALUE}", defaultValue.equals(NO_DEFAULT_VALUE) ? "none" : defaultValue)
                 .replace("${COMPLETION-CANDIDATES}", MiniCli.enumCandidates(type));
     }
 
     private static void collectSubs(Class<?> cmdClass, String prefix, List<String[]> entries) {
         Command annotation = cmdClass.getAnnotation(Command.class);
         if (annotation == null) {
+            return;
+        }
+
+        if (annotation.hidden()) {
             return;
         }
 
@@ -360,7 +326,7 @@ final class HelpRenderer {
         if (!commandConfig.effectiveShowDefaultValuesInHelp(annotation) || !opt.showDefaultValueInHelp()) {
             return description;
         }
-        if (opt.defaultValue() == null || opt.defaultValue().isEmpty()) {
+        if (opt.defaultValue() == null || opt.defaultValue().equals(NO_DEFAULT_VALUE)) {
             return description;
         }
         // If the description already uses the placeholder, don't auto-append a template too.
@@ -387,6 +353,18 @@ final class HelpRenderer {
         return (description == null || description.isBlank())
                 ? rendered.stripLeading()
                 : description + rendered;
+    }
+
+    private static void renderFooter(Command annotation, PrintStream out) {
+        if (annotation == null) return;
+        String footer = annotation.footer();
+        if (footer == null || footer.isBlank()) return;
+
+        out.println();
+        out.print(footer);
+        if (!footer.endsWith("\n") && !footer.endsWith("\r")) {
+            out.println();
+        }
     }
 
     private static boolean hasShortOption(String[] names) {

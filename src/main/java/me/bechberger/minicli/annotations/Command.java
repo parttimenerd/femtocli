@@ -83,4 +83,15 @@ public @interface Command {
         /** Force hiding default values in help for this command. */
         DISABLE
     }
+
+    /**
+     * Whether this command should be hidden from the help output of the parent command.
+     */
+    boolean hidden() default false;
+
+    /**
+     * Footer text, shown after the options and subcommands in help output.
+     * Each array element is printed on a separate line.
+     */
+    String footer() default "";
 }

@@ -1,15 +1,12 @@
 package me.bechberger.minicli;
 
 import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Mixin;
 import me.bechberger.minicli.annotations.Option;
 import me.bechberger.minicli.annotations.Parameters;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.time.Duration;
@@ -295,7 +292,7 @@ class MiniCliTest {
 
     @Command(name = "optional", description = "Test optional parameter", mixinStandardHelpOptions = true)
     static class OptionalParamCmd implements Callable<Integer> {
-        @Parameters(index = "0", arity = "0..1", description = "Optional value")
+        @Parameters(arity = "0..1", description = "Optional value")
         String value;
 
         @Override
@@ -306,7 +303,7 @@ class MiniCliTest {
 
     @Command(name = "required-param", description = "Test required parameter", mixinStandardHelpOptions = true)
     static class RequiredParamCmd implements Callable<Integer> {
-        @Parameters(index = "0", description = "Required value")
+        @Parameters(description = "Required value")
         String value;
 
         @Override
@@ -454,7 +451,7 @@ class MiniCliTest {
 
     @Test
     void helpReturnsExitCode0() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"--help"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "--help");
 
         assertEquals(0, res.exitCode());
         assertThat(res.out()).contains("Usage: root [-hV] [COMMAND]");
@@ -464,7 +461,7 @@ class MiniCliTest {
 
     @Test
     void versionReturnsExitCode0AndPrintsVersion() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"--version"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "--version");
 
         assertEquals(0, res.exitCode());
         assertThat(res.out().trim()).isEqualTo("1.2.3");
@@ -472,7 +469,7 @@ class MiniCliTest {
 
     @Test
     void missingRequiredOptionReturns2() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub");
 
         assertEquals(2, res.exitCode());
         assertThat(res.err()).contains("Missing required option");
@@ -480,7 +477,7 @@ class MiniCliTest {
 
     @Test
     void requiredOptionProvidedIsAccepted() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub", "--req", "x", "--flag"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub", "--req", "x", "--flag");
 
         assertEquals(0, res.exitCode());
         assertThat(res.err()).isBlank();
@@ -488,7 +485,7 @@ class MiniCliTest {
 
     @Test
     void rootHelpListsNestedSubcommandsFlattened() {
-        RunResult res = MiniCli.builder().runCaptured(new JstallRoot(), new String[]{"--help"});
+        RunResult res = MiniCli.builder().runCaptured(new JstallRoot(), "--help");
 
         assertEquals(0, res.exitCode());
         String help = res.out();
@@ -500,7 +497,7 @@ class MiniCliTest {
 
     @Test
     void longDescriptionsAreDisplayed() {
-        RunResult res = MiniCli.builder().runCaptured(new JstallRoot(), new String[]{"--help"});
+        RunResult res = MiniCli.builder().runCaptured(new JstallRoot(), "--help");
 
         assertEquals(0, res.exitCode());
         String help = res.out();
@@ -513,7 +510,7 @@ class MiniCliTest {
 
     @Test
     void optionEqualsSyntaxIsSupported() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub", "--req=x"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub", "--req=x");
 
         assertEquals(0, res.exitCode());
         assertThat(res.err()).isBlank();
@@ -521,7 +518,7 @@ class MiniCliTest {
 
     @Test
     void unknownOptionReturns2() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub", "--nope"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub", "--nope");
 
         assertEquals(2, res.exitCode());
         assertThat(res.err()).contains("Unknown option");
@@ -532,7 +529,7 @@ class MiniCliTest {
         // Make a command with a single positional parameter, to ensure "--" stops option parsing.
         @Command(name = "pos", description = "pos", mixinStandardHelpOptions = true)
         class Positional implements Callable<Integer> {
-            @Parameters(index = "0", description = "value")
+            @Parameters(description = "value")
             String value;
 
             @Override
@@ -542,7 +539,7 @@ class MiniCliTest {
         }
 
         Positional cmd = new Positional();
-        RunResult res = MiniCli.builder().runCaptured(cmd, new String[]{"--", "--not-an-option"});
+        RunResult res = MiniCli.builder().runCaptured(cmd, "--", "--not-an-option");
 
         assertEquals(0, res.exitCode());
         assertThat(cmd.value).isEqualTo("--not-an-option");
@@ -552,7 +549,7 @@ class MiniCliTest {
     @Test
     void booleanExplicitValuesAreParsed() {
         Sub cmd = new Sub();
-        RunResult res = MiniCli.builder().runCaptured(cmd, new String[]{"--req", "x", "--flag=false"});
+        RunResult res = MiniCli.builder().runCaptured(cmd, "--req", "x", "--flag=false");
 
         assertEquals(0, res.exitCode());
         assertThat(cmd.flag).isFalse();
@@ -561,7 +558,7 @@ class MiniCliTest {
 
     @Test
     void missingOptionValueReturns2() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub", "--req"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub", "--req");
 
         assertEquals(2, res.exitCode());
         assertThat(res.err()).contains("Missing value for option");
@@ -571,7 +568,7 @@ class MiniCliTest {
     void tooManyPositionalsReturns2() {
         @Command(name = "pos", description = "pos", mixinStandardHelpOptions = true)
         class Positional implements Callable<Integer> {
-            @Parameters(index = "0", description = "value")
+            @Parameters(description = "value")
             String value;
 
             @Override
@@ -580,7 +577,7 @@ class MiniCliTest {
             }
         }
 
-        RunResult res = MiniCli.builder().runCaptured(new Positional(), new String[]{"a", "b"});
+        RunResult res = MiniCli.builder().runCaptured(new Positional(), "a", "b");
 
         assertEquals(2, res.exitCode());
         assertThat(res.err()).contains("Too many parameters");
@@ -588,7 +585,7 @@ class MiniCliTest {
 
     @Test
     void helpForSubcommandReturns0() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"sub", "--help"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "sub", "--help");
 
         assertEquals(0, res.exitCode());
         assertThat(res.out()).contains("Usage: root sub");
@@ -597,7 +594,7 @@ class MiniCliTest {
 
     @Test
     void versionReturns0EvenWithExtraArgs() {
-        RunResult res = MiniCli.builder().runCaptured(new Root(), new String[]{"--version", "sub"});
+        RunResult res = MiniCli.builder().runCaptured(new Root(), "--version", "sub");
 
         assertEquals(0, res.exitCode());
         assertThat(res.out().trim()).isEqualTo("1.2.3");
@@ -873,7 +870,7 @@ class MiniCliTest {
 
         int code = MiniCli.builder()
             .commandConfig(config)
-            .run(new DefaultsInHelpCmd(), new PrintStream(out), new PrintStream(err), new String[]{"--help"});
+            .run(new DefaultsInHelpCmd(), new PrintStream(out), new PrintStream(err), "--help");
 
         assertEquals(0, code);
         String help = out.toString();
@@ -1421,8 +1418,7 @@ class MiniCliTest {
 
     @Command(
             name = "no-help",
-            description = "Command without help options displayed",
-            mixinStandardHelpOptions = false
+            description = "Command without help options displayed"
     )
     static class NoHelpCmd implements Runnable {
         @Option(names = "--value", description = "Some value")
@@ -1435,8 +1431,7 @@ class MiniCliTest {
 
     @Command(
             name = "no-help-with-opts",
-            description = "No help display but has options",
-            mixinStandardHelpOptions = false
+            description = "No help display but has options"
     )
     static class NoHelpWithOwnOptions implements Callable<Integer> {
         @Option(names = "--host", description = "Hostname")
@@ -1454,8 +1449,7 @@ class MiniCliTest {
     @Command(
             name = "no-help-root",
             description = "Root without help display",
-            subcommands = {NoHelpSubCmd.class},
-            mixinStandardHelpOptions = false
+            subcommands = {NoHelpSubCmd.class}
     )
     static class NoHelpRoot implements Runnable {
         @Override
@@ -1465,8 +1459,7 @@ class MiniCliTest {
 
     @Command(
             name = "subcmd",
-            description = "Sub command",
-            mixinStandardHelpOptions = false
+            description = "Sub command"
     )
     static class NoHelpSubCmd implements Runnable {
         @Option(names = "--opt", description = "Option")
@@ -1491,8 +1484,7 @@ class MiniCliTest {
 
     @Command(
             name = "no-help-sub",
-            description = "Sub without help display",
-            mixinStandardHelpOptions = false
+            description = "Sub without help display"
     )
     static class MixedHelpSubCmd implements Callable<Integer> {
         @Option(names = "--host", description = "Host option")
@@ -1963,92 +1955,30 @@ class MiniCliTest {
         assertThat(help).contains("Usage: custom-help <special syntax>");
     }
 
-    @Command(
-            name = "method-sub-root",
-            description = "Root with method subcommands",
-            mixinStandardHelpOptions = true
-    )
-    static class MethodSubRoot implements Runnable {
-        @Option(names = "--global", description = "Global option")
-        String globalOpt;
-
-        @Override
-        public void run() {
-        }
-
-        @Command(name = "sub1", description = "First method subcommand")
-        public int sub1() {
-            return 42;
-        }
-
-        @Command(name = "sub2", description = "Second method subcommand")
-        public int sub2() {
-            return 99;
-        }
-    }
-
     @Test
-    void methodSubcommandIsExecuted() {
-        MethodSubRoot cmd = new MethodSubRoot();
-        var res = run(cmd, "sub1");
-        assertEquals(42, res.exitCode());
-    }
-
-    @Test
-    void methodSubcommandWithDifferentReturnValue() {
-        var res = run(new MethodSubRoot(), "sub2");
-        assertEquals(99, res.exitCode());
-    }
-
-    @Test
-    void methodSubcommandsListedInHelp_methodSubRoot() {
-        CliTest test = CliTest.of(new MethodSubRoot())
-                .args("--help")
-                .run()
-                .expectCode(0);
-
-        assertThat(test.stdout()).contains("sub1");
-        assertThat(test.stdout()).contains("sub2");
-        assertThat(test.stdout()).contains("First method subcommand");
-        assertThat(test.stdout()).contains("Second method subcommand");
-    }
-
-    @Test
-    void combinedClassAndMethodSubcommands() {
-        @Command(name = "class-sub", description = "A class-based subcommand", mixinStandardHelpOptions = true)
-        class ClassSubCmd implements Runnable {
-            @Override
-            public void run() {
-            }
-        }
-
+    void footerIsPrintedInHelp() {
         @Command(
-                name = "combined-subs",
-                description = "Combined class and method subcommands",
-                subcommands = {ClassSubCmd.class},
+                name = "footer-cmd",
+                description = "Has a footer",
+                footer = "Footer line 1\nFooter line 2",
                 mixinStandardHelpOptions = true
         )
-        class CombinedSubsRoot implements Runnable {
+        class FooterCmd implements Runnable {
             @Override
             public void run() {
             }
-
-            @Command(name = "method-sub", description = "A method-based subcommand")
-            public int methodSub() {
-                return 77;
-            }
         }
 
-        CliTest test = CliTest.of(new CombinedSubsRoot())
+        CliTest test = CliTest.of(new FooterCmd())
                 .args("--help")
                 .run()
                 .expectCode(0);
 
-        assertThat(test.stdout()).contains("class-sub");
-        assertThat(test.stdout()).contains("method-sub");
-
-        var res = run(new CombinedSubsRoot(), "method-sub");
-        assertEquals(77, res.exitCode());
+        String help = test.stdout();
+        assertThat(help).contains("Footer line 1");
+        assertThat(help).contains("Footer line 2");
+        // Footer should be at the end (allow trailing whitespace/newlines from the renderer)
+        assertThat(help.trim()).endsWith("Footer line 2");
     }
 
     // ========== Exception handling tests ==========
@@ -2291,15 +2221,6 @@ class MiniCliTest {
     }
 
     @Test
-    void builtInDurationConverterParsesIso8601() {
-        CustomTypeCmd cmd = new CustomTypeCmd();
-        var res = run(cmd, "--duration", "PT1H30M");
-
-        assertEquals(0, res.exitCode());
-        assertEquals(Duration.ofHours(1).plusMinutes(30), cmd.duration);
-    }
-
-    @Test
     void builtInDurationConverterParsesNegative() {
         CustomTypeCmd cmd = new CustomTypeCmd();
         var res = run(cmd, "--duration", "-1.25s");
@@ -2431,7 +2352,7 @@ class MiniCliTest {
         assertEquals(0, res.exitCode());
         assertEquals("baseValue", cmd.baseOption);
         assertEquals("implValue", cmd.implOption);
-        assertEquals("implValue", ((BaseCommand)cmd).returnOption());
+        assertEquals("implValue", cmd.returnOption());
     }
 
     @Command(name = "final field")

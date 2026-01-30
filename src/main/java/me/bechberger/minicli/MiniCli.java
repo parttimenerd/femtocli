@@ -9,8 +9,6 @@ import java.io.PrintStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
@@ -21,6 +19,8 @@ import java.util.function.Consumer;
  * Minimal reflection-based CLI runner with Java 21 features.
  */
 public final class MiniCli {
+
+    static final String NO_DEFAULT_VALUE = "__NO_DEFAULT_VALUE__";
 
     /** Builder for configuring MiniCli with custom type handlers. */
     public static class Builder {
@@ -77,11 +77,6 @@ public final class MiniCli {
      */
     public static int run(Object root, PrintStream out, PrintStream err, String[] args) {
         return execute(root, out, err, args, Map.of(), new CommandConfig());
-    }
-
-    public static int run(Object root, PrintStream out, PrintStream err, String[] args,
-                          Map<Class<?>, TypeConverter<?>> converters) {
-        return execute(root, out, err, args, converters, new CommandConfig());
     }
 
     public static RunResult runCaptured(Object root, String[] args) {
@@ -218,12 +213,7 @@ public final class MiniCli {
     private static void parseInto(Object cmd, Deque<String> tokens,
                                   Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         var model = CommandModel.of(cmd);
-        UsageContext ctx = USAGE_CONTEXT.get();
-        if (ctx != null) {
-            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig);
-        } else {
-            injectSpec(model, System.out, System.err, List.of(commandName(cmd)), new CommandConfig());
-        }
+        injectSpecFromContext(model);
 
         // Parse tokens
         Set<Field> seenFields = new HashSet<>();
@@ -234,13 +224,7 @@ public final class MiniCli {
 
         while (!tokens.isEmpty()) {
             String token = tokens.removeFirst();
-
-            if (isHelp(token)) {
-                throw UsageEx.help(cmd);
-            }
-            if (isVersion(token)) {
-                throw UsageEx.version();
-            }
+            throwIfHelpOrVersion(cmd, token);
             if (acceptOptions && "--".equals(token)) {
                 acceptOptions = false;
                 continue;
@@ -266,13 +250,28 @@ public final class MiniCli {
         validateRequiredOptions(cmd, model.options, seenFields);
     }
 
+    private static void throwIfHelpOrVersion(Object cmd, String token) throws UsageEx {
+        if (isHelp(token)) {
+            throw UsageEx.help(cmd);
+        }
+        if (isVersion(token)) {
+            throw UsageEx.version();
+        }
+    }
+
+    private static void injectSpecFromContext(CommandModel model) throws Exception {
+        UsageContext ctx = USAGE_CONTEXT.get();
+        if (ctx != null) {
+            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig);
+        } else {
+            injectSpec(model, System.out, System.err, List.of(commandName(model.cmd)), new CommandConfig());
+        }
+    }
+
     private static Object invokeConverterMethod(String spec, Object cmd, String raw, Class<?> targetType) throws Exception {
         Method m = resolveMethod(spec, cmd != null ? cmd.getClass() : null);
-        boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
-        Object receiver = isStatic ? null : cmd;
-        if (!isStatic && receiver == null) {
-            throw new IllegalArgumentException("Converter method requires a command instance: " + spec);
-        }
+        Object receiver = methodReceiverOrThrow(m, cmd, "Converter", spec);
+
         // Expect single String parameter
         if (m.getParameterCount() != 1 || m.getParameterTypes()[0] != String.class) {
             throw new IllegalArgumentException("Converter method must take a single String argument: " + spec);
@@ -285,47 +284,34 @@ public final class MiniCli {
         throw new IllegalArgumentException("Converter method returned incompatible type for " + spec);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void runVerifiers(Object cmdForErrors, Object value, Class<?> targetType, Option opt, Parameters param) throws UsageEx {
+    private static Object methodReceiverOrThrow(Method m, Object instance, String kind, String spec) {
+        boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
+        if (isStatic) {
+            return null;
+        }
+        if (instance == null) {
+            throw new IllegalArgumentException(kind + " method requires a command instance: " + spec);
+        }
+        return instance;
+    }
+
+    private static void invokeSingleArgMethod(String spec, Object cmdForErrors, Object value) throws Exception {
+        Method m = resolveMethod(spec, cmdForErrors != null ? cmdForErrors.getClass() : null);
+        Object receiver = methodReceiverOrThrow(m, cmdForErrors, "Verifier", spec);
+        if (m.getParameterCount() != 1) {
+            throw new IllegalArgumentException("Verifier method must take a single argument: " + spec);
+        }
+        m.setAccessible(true);
+        m.invoke(receiver, value);
+    }
+
+    private static void runVerifiers(Object cmdForErrors, Object value, Option opt, Parameters param) throws UsageEx {
         try {
             if (opt != null) {
-                if (opt.verifier() != null && opt.verifier() != Verifier.NullVerifier.class) {
-                    Verifier v = opt.verifier().getDeclaredConstructor().newInstance();
-                    v.verify(value);
-                }
-                if (!opt.verifierMethod().isBlank()) {
-                    Method m = resolveMethod(opt.verifierMethod(), cmdForErrors != null ? cmdForErrors.getClass() : null);
-                    boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
-                    Object receiver = isStatic ? null : cmdForErrors;
-                    if (!isStatic && receiver == null) {
-                        throw new IllegalArgumentException("Verifier method requires a command instance: " + opt.verifierMethod());
-                    }
-                    if (m.getParameterCount() != 1) {
-                        throw new IllegalArgumentException("Verifier method must take a single argument: " + opt.verifierMethod());
-                    }
-                    m.setAccessible(true);
-                    m.invoke(receiver, value);
-                }
+                runVerifier(cmdForErrors, value, opt.verifier(), opt.verifierMethod());
             }
-
             if (param != null) {
-                if (param.verifier() != null && param.verifier() != Verifier.NullVerifier.class) {
-                    Verifier v = param.verifier().getDeclaredConstructor().newInstance();
-                    v.verify(value);
-                }
-                if (!param.verifierMethod().isBlank()) {
-                    Method m = resolveMethod(param.verifierMethod(), cmdForErrors != null ? cmdForErrors.getClass() : null);
-                    boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
-                    Object receiver = isStatic ? null : cmdForErrors;
-                    if (!isStatic && receiver == null) {
-                        throw new IllegalArgumentException("Verifier method requires a command instance: " + param.verifierMethod());
-                    }
-                    if (m.getParameterCount() != 1) {
-                        throw new IllegalArgumentException("Verifier method must take a single argument: " + param.verifierMethod());
-                    }
-                    m.setAccessible(true);
-                    m.invoke(receiver, value);
-                }
+                runVerifier(cmdForErrors, value, param.verifier(), param.verifierMethod());
             }
         } catch (java.lang.reflect.InvocationTargetException ite) {
             Throwable cause = ite.getCause();
@@ -335,6 +321,17 @@ public final class MiniCli {
             throw new UsageEx(cmdForErrors, cause != null ? cause.getMessage() : ite.getMessage());
         } catch (Exception e) {
             throw new UsageEx(cmdForErrors, e.getMessage());
+        }
+    }
+
+    private static void runVerifier(Object cmdForErrors, Object value,
+                                     Class<? extends Verifier> verifierClass,
+                                     String verifierMethod) throws Exception {
+        if (verifierClass != null && verifierClass != Verifier.NullVerifier.class) {
+            verifierClass.getDeclaredConstructor().newInstance().verify(value);
+        }
+        if (!verifierMethod.isBlank()) {
+            invokeSingleArgMethod(verifierMethod, cmdForErrors, value);
         }
     }
 
@@ -391,7 +388,7 @@ public final class MiniCli {
             }
         } else {
             Object converted = convert(value, type, optMeta.field.getName(), opt, converters, cmd);
-            runVerifiers(cmd, converted, type, opt, null);
+            runVerifiers(cmd, converted, opt, null);
             optMeta.field.set(optMeta.target, converted);
         }
     }
@@ -413,7 +410,7 @@ public final class MiniCli {
                 Object array = Array.newInstance(componentType, values.size());
                 for (int i = 0; i < values.size(); i++) {
                     Object converted = convert(values.get(i), componentType, field.getName(), opt, converters, model.cmd);
-                    runVerifiers(model.cmd, converted, componentType, opt, null);
+                    runVerifiers(model.cmd, converted, opt, null);
                     Array.set(array, i, converted);
                 }
                 field.set(target, array);
@@ -422,7 +419,7 @@ public final class MiniCli {
                 List<Object> list = new ArrayList<>();
                 for (String v : values) {
                     Object converted = convert(v, String.class, field.getName(), opt, converters, model.cmd);
-                    runVerifiers(model.cmd, converted, String.class, opt, null);
+                    runVerifiers(model.cmd, converted, opt, null);
                     list.add(converted);
                 }
                 field.set(target, list);
@@ -438,8 +435,7 @@ public final class MiniCli {
             Field field = optMeta.field;
             Option opt = optMeta.opt;
 
-            boolean shouldApply = (!seenFields.contains(field) && !opt.defaultValue().isEmpty())
-                                  || (seenFieldsWithoutValue.contains(field) && !opt.defaultValue().isEmpty());
+            boolean shouldApply = !opt.defaultValue().equals(NO_DEFAULT_VALUE) && (!seenFields.contains(field) || seenFieldsWithoutValue.contains(field));
 
             if (shouldApply) {
                 optMeta.field.set(optMeta.target,
@@ -589,7 +585,7 @@ public final class MiniCli {
             Object array = Array.newInstance(componentType, values.size());
             for (int i = 0; i < values.size(); i++) {
                 Object converted = convert(values.get(i), componentType, field.getName(), null, converters, cmd);
-                runVerifiers(cmd, converted, componentType, null, paramInfo.param);
+                runVerifiers(cmd, converted, null, paramInfo.param);
                 Array.set(array, i, converted);
             }
             field.set(cmd, array);
@@ -597,13 +593,13 @@ public final class MiniCli {
             List<Object> list = new ArrayList<>();
             for (String v : values) {
                 Object converted = convert(v, String.class, field.getName(), null, converters, cmd);
-                runVerifiers(cmd, converted, String.class, null, paramInfo.param);
+                runVerifiers(cmd, converted, null, paramInfo.param);
                 list.add(converted);
             }
             field.set(cmd, list);
         } else if (!values.isEmpty()) {
             Object converted = convert(values.getFirst(), field.getType(), field.getName(), null, converters, cmd);
-            runVerifiers(cmd, converted, field.getType(), null, paramInfo.param);
+            runVerifiers(cmd, converted, null, paramInfo.param);
             field.set(cmd, converted);
         }
 
@@ -619,18 +615,18 @@ public final class MiniCli {
         if (currentIndex < positionals.size()) {
             String value = positionals.get(currentIndex);
             Object converted = convert(value, field.getType(), field.getName(), null, converters, cmd);
-            runVerifiers(cmd, converted, field.getType(), null, param);
+            runVerifiers(cmd, converted, null, param);
             field.set(cmd, converted);
             return currentIndex + 1;
         }
 
-        if (!isOptional && param.defaultValue().isEmpty()) {
+        if (!isOptional && param.defaultValue().equals(NO_DEFAULT_VALUE)) {
             throw new UsageEx(cmd, "Missing required parameter: " + getParamLabel(paramInfo));
         }
 
-        if (!param.defaultValue().isEmpty()) {
+        if (!param.defaultValue().equals(NO_DEFAULT_VALUE)) {
             Object converted = convert(param.defaultValue(), field.getType(), field.getName(), null, converters, cmd);
-            runVerifiers(cmd, converted, field.getType(), null, param);
+            runVerifiers(cmd, converted, null, param);
             field.set(cmd, converted);
         }
 
@@ -664,86 +660,35 @@ public final class MiniCli {
     }
 
     /**
-     * Parse duration from either ISO-8601 (e.g. "PT1H30M") or a short human format like
-     * "400ms", "4.5s", "2m", "1h", "1d" (case-insensitive). Fractional values are supported.
+     * Parse duration a short human format like
+     * "400ms", "4.5s", "2m", "1h", "1d"
      */
     static Duration parseDuration(String raw) {
-        if (raw == null) {
-            throw new IllegalArgumentException("Duration cannot be null");
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("Duration cannot be null or empty");
         }
         String s = raw.trim();
-        if (s.isEmpty()) {
-            throw new IllegalArgumentException("Duration cannot be empty");
+        int i = 0;
+        for (; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 'a' && c <= 'z') || c == 'µ') break;
         }
 
-        // Prefer the JDK parser first (keeps full ISO-8601 support).
-        try {
-            return Duration.parse(s);
-        } catch (Exception ignored) {
-            // fall through
-        }
+        String num = s.substring(0, i).trim();
+        String unit = s.substring(i).trim();
 
-        // Simple human form: <number><unit>
-        // number: 123 | 123.45 | .5 (we'll normalize)
-        // unit: ns, us/µs, ms, s, m, h, d
-        String lower = s.toLowerCase(Locale.ROOT);
+        long nanosPerUnit = switch (unit) {
+            case "ns" -> 1L;
+            case "us" -> 1_000L;
+            case "ms" -> 1_000_000L;
+            case "s" -> 1_000_000_000L;
+            case "m" -> 60_000_000_000L;
+            case "h" -> 3_600_000_000_000L;
+            case "d" -> 86_400_000_000_000L;
+            default -> throw new IllegalArgumentException("Invalid duration unit: " + unit);
+        };
 
-        int unitStart = -1;
-        for (int i = 0; i < lower.length(); i++) {
-            char c = lower.charAt(i);
-            if ((c >= 'a' && c <= 'z') || c == 'µ') {
-                unitStart = i;
-                break;
-            }
-        }
-        if (unitStart <= 0) {
-            throw new IllegalArgumentException("Invalid duration: " + raw);
-        }
-
-        String numberPart = lower.substring(0, unitStart).trim();
-        String unitPart = lower.substring(unitStart).trim();
-        if (numberPart.isEmpty() || unitPart.isEmpty()) {
-            throw new IllegalArgumentException("Invalid duration: " + raw);
-        }
-
-        // Accept leading ".5" by normalizing to "0.5" for BigDecimal.
-        if (numberPart.startsWith(".")) numberPart = "0" + numberPart;
-        if (numberPart.startsWith("-.")) numberPart = "-0" + numberPart.substring(1);
-        if (numberPart.startsWith("+.")) numberPart = "+0" + numberPart.substring(1);
-
-        BigDecimal value = new BigDecimal(numberPart);
-
-        // Normalize microsecond unit spelling.
-        if ("µs".equals(unitPart)) unitPart = "us";
-
-        BigDecimal nanosPerUnit;
-        switch (unitPart) {
-            case "ns" -> nanosPerUnit = BigDecimal.ONE;
-            case "us" -> nanosPerUnit = BigDecimal.valueOf(1_000L);
-            case "ms" -> nanosPerUnit = BigDecimal.valueOf(1_000_000L);
-            case "s" -> nanosPerUnit = BigDecimal.valueOf(1_000_000_000L);
-            case "m" -> nanosPerUnit = BigDecimal.valueOf(60_000_000_000L);
-            case "h" -> nanosPerUnit = BigDecimal.valueOf(3_600_000_000_000L);
-            case "d" -> nanosPerUnit = BigDecimal.valueOf(86_400_000_000_000L);
-            default -> throw new IllegalArgumentException("Invalid duration unit: " + unitPart);
-        }
-
-        BigDecimal totalNanos = value.multiply(nanosPerUnit);
-
-        // Convert to seconds + nanos (floor for seconds; nanos remainder always positive).
-        BigDecimal[] divRem = totalNanos.divideAndRemainder(BigDecimal.valueOf(1_000_000_000L));
-        BigDecimal secondsBD = divRem[0];
-        BigDecimal nanosBD = divRem[1];
-
-        // Ensure remainder is in [0, 1e9) by adjusting when negative.
-        if (nanosBD.signum() < 0) {
-            secondsBD = secondsBD.subtract(BigDecimal.ONE);
-            nanosBD = nanosBD.add(BigDecimal.valueOf(1_000_000_000L));
-        }
-
-        long seconds = secondsBD.longValueExact();
-        int nanos = nanosBD.setScale(0, RoundingMode.UNNECESSARY).intValueExact();
-        return Duration.ofSeconds(seconds, nanos);
+        return Duration.ofNanos(Math.round(Double.parseDouble(num) * nanosPerUnit));
     }
 
     private static int invoke(Object cmd) throws Exception {
@@ -790,34 +735,6 @@ public final class MiniCli {
             fields.addAll(Arrays.asList(current.getDeclaredFields()));
         }
         return fields;
-    }
-
-    private static final class UsageEx extends Exception {
-        final Object cmd;
-        final boolean help;
-        final boolean version;
-
-        UsageEx(Object cmd, String message) {
-            super(message);
-            this.cmd = cmd;
-            this.help = false;
-            this.version = false;
-        }
-
-        private UsageEx(Object cmd, boolean help, boolean version) {
-            super("");
-            this.cmd = cmd;
-            this.help = help;
-            this.version = version;
-        }
-
-        static UsageEx help(Object cmd) {
-            return new UsageEx(cmd, true, false);
-        }
-
-        static UsageEx version() {
-            return new UsageEx(null, false, true);
-        }
     }
 
     private static final class UsageContext {
