@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.9] - 2026-01-31
+
+### Added
+- Added basic `MiniCLI#run` method
+
+### Fixed
+- Subcommand handling in help
+- Handling of private constructors and fields
+
 ## [0.1.8] - 2026-01-30
 
 ### Added

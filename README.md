@@ -2,8 +2,10 @@
 
 [![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/minicli)](https://central.sonatype.com/artifact/me.bechberger.util/minicli)
 
+Powerful yet minimal command line interface framework for Java applications.
+
 A minimal (< 40KB) Java command line interface (CLI) framework for building small command line applications,
-using annotations to define commands, options, and positional parameters. 
+using annotations to define (sub)commands, options, and positional parameters. 
 It is designed for tools where minimizing dependencies and binary size is important.
 
 While it's small, it should still cover most of the common use cases.
@@ -21,7 +23,7 @@ Features
 - Mixins (reusable option groups) via `@Mixin`
 - Nested subcommands (classes and methods)
 - Multi-value options: arrays and `List` (repeat option or use `split` delimiter)
-- Built-in type conversion for primitive types, `Path`, enums, and support for custom converters
+- Built-in type conversion for primitive types, `Path`, `Duration`, enums, and support for custom converters
 - Automatic `-h/--help` and `-V/--version` flags
 - End-of-options marker (`--`)
 - Description placeholders (`${DEFAULT-VALUE}`, `${COMPLETION-CANDIDATES}`)
@@ -70,7 +72,7 @@ class MyApp implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.run(new MyApp(), System.out, System.err, args));
+        System.exit(MiniCli.run(new MyApp(), args));
     }
 }
 ```
@@ -84,7 +86,7 @@ Add the library as a dependency in your project (< 50KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.8</version>
+  <version>0.1.9</version>
 </dependency>
 ```
 
@@ -94,7 +96,7 @@ And for the minimal version without debug metadata (< 40KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli-minimal</artifactId>
-  <version>0.1.8</version>
+  <version>0.1.9</version>
 </dependency>
 ```
 
@@ -399,7 +401,7 @@ class Tiny implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.builder().run(new Tiny(), System.out, System.err, args));
+        System.exit(MiniCli.run(new Tiny(), System.out, System.err, args));
     }
 }
 ```
