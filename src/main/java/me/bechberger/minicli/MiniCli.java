@@ -83,6 +83,10 @@ public final class MiniCli {
         return builder().runCaptured(root, args);
     }
 
+    public static int run(Object root, String[] args) {
+        return builder().run(root, args);
+    }
+
     private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
                                Map<Class<?>, TypeConverter<?>> converters,
                                CommandConfig commandConfig) {
@@ -117,7 +121,9 @@ public final class MiniCli {
                 Class<?> sub = findSubcommand(cmd.getClass(), next);
                 if (sub != null) {
                     tokens.removeFirst();
-                    cmd = sub.getDeclaredConstructor().newInstance();
+                    var ctor = sub.getDeclaredConstructor();
+                    ctor.setAccessible(true);
+                    cmd = ctor.newInstance();
                     commandPath.add(commandName(cmd));
                     continue;
                 }

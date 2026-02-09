@@ -257,7 +257,7 @@ final class HelpRenderer {
         if (!hasSubcommandClasses && !hasSubcommandMethods) return;
 
         List<String[]> entries = new ArrayList<>();
-        if (hasSubcommandClasses) collectSubs(cmdClass, "", entries);
+        if (hasSubcommandClasses) collectDirectSubcommands(cmdClass, entries);
         collectMethodSubs(cmdClass, entries);
         if (entries.isEmpty()) return;
 
@@ -268,6 +268,22 @@ final class HelpRenderer {
 
         for (String[] entry : entries) {
             if (!entry[0].isEmpty()) out.printf("  %-" + (maxNameLength + 2) + "s%s%n", entry[0], entry[1]);
+        }
+    }
+
+    private static void collectDirectSubcommands(Class<?> cmdClass, List<String[]> entries) {
+        Command annotation = cmdClass.getAnnotation(Command.class);
+        if (annotation == null || annotation.hidden()) {
+            return;
+        }
+
+        for (Class<?> subcommand : annotation.subcommands()) {
+            Command sub = subcommand.getAnnotation(Command.class);
+            if (sub == null || sub.hidden()) {
+                continue;
+            }
+            String description = sub.description().length > 0 ? sub.description()[0] : "";
+            entries.add(new String[]{sub.name(), description});
         }
     }
 
@@ -294,6 +310,9 @@ final class HelpRenderer {
                 .replace("${COMPLETION-CANDIDATES}", MiniCli.enumCandidates(type));
     }
 
+    // (kept for backwards compatibility; no longer used for help output)
+    @Deprecated
+    @SuppressWarnings("unused")
     private static void collectSubs(Class<?> cmdClass, String prefix, List<String[]> entries) {
         Command annotation = cmdClass.getAnnotation(Command.class);
         if (annotation == null) {
@@ -304,18 +323,21 @@ final class HelpRenderer {
             return;
         }
 
-        String path = prefix.isEmpty() ? annotation.name() : prefix + " " + annotation.name();
+        String name = annotation.name();
         String description = annotation.description().length > 0 ? annotation.description()[0] : "";
 
-        // Add entry (skip root command)
+        // Full command path that should show up in the *current* help output.
+        // Example: when collecting for root help, "ai full" should be shown, not "full".
+        String fullPath = prefix.isEmpty() ? name : (prefix + " " + name);
+
+        // Add entry (skip the command that owns this help screen; i.e. the "root" of this traversal)
         if (!prefix.isEmpty()) {
-            entries.add(new String[]{path, description});
+            entries.add(new String[]{fullPath, description});
         }
 
         // Recursively collect subcommands
-        String newPrefix = prefix.isEmpty() ? annotation.name() : path;
         for (Class<?> subcommand : annotation.subcommands()) {
-            collectSubs(subcommand, newPrefix, entries);
+            collectSubs(subcommand, fullPath, entries);
         }
     }
 
