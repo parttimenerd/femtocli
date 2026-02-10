@@ -189,6 +189,10 @@ public final class MiniCli {
         return c == boolean.class || c == Boolean.class;
     }
 
+    private static boolean looksLikeExplicitBooleanValue(String s) {
+        return s != null && ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s));
+    }
+
     private static boolean isHelp(String t) { return "--help".equals(t) || "-h".equals(t); }
     private static boolean isVersion(String t) { return "--version".equals(t) || "-V".equals(t); }
 
@@ -363,24 +367,30 @@ public final class MiniCli {
 
         // If no explicit value is provided (no "=...")
         if (value == null) {
-            // Boolean flags: presence means true
+            // Boolean flags: presence means true, but allow an explicit boolean value as the next token.
             if (isBoolean) {
-                optMeta.field.set(optMeta.target, true);
-                return;
+                if (!tokens.isEmpty() && looksLikeExplicitBooleanValue(tokens.peekFirst())) {
+                    value = tokens.removeFirst();
+                } else {
+                    optMeta.field.set(optMeta.target, true);
+                    return;
+                }
             }
 
             // Optional-value option: allow "--opt" without a value
-            if (opt != null && "0..1".equals(opt.arity())) {
+            if (value == null && opt != null && "0..1".equals(opt.arity())) {
                 // Mark as seen, but remember that no explicit value was provided.
                 seenFieldsWithoutValue.add(optMeta.field);
                 return;
             }
 
             // Otherwise a value is required
-            if (tokens.isEmpty()) {
-                throw new UsageEx(cmd, "Missing value for option: " + name);
+            if (value == null) {
+                if (tokens.isEmpty()) {
+                    throw new UsageEx(cmd, "Missing value for option: " + name);
+                }
+                value = tokens.removeFirst();
             }
-            value = tokens.removeFirst();
         }
 
         if (type.isArray() || List.class.isAssignableFrom(type)) {

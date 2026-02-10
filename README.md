@@ -406,6 +406,42 @@ class Tiny implements Runnable {
 }
 ```
 
+### Ignore options (inheritance / mixins)
+
+Sometimes a subclass should not expose all options it inherits from a base command (or from a mixin).
+Use `@IgnoreOptions` on the option holder class to exclude options, or to start from an empty set and include only a few.
+
+```java
+import me.bechberger.minicli.annotations.IgnoreOptions;
+import me.bechberger.minicli.annotations.Mixin;
+import me.bechberger.minicli.annotations.Option;
+
+class Base implements Runnable {
+    @Option(names = "--a") int a;
+    @Option(names = "--b") int b;
+    public void run() {}
+}
+
+@IgnoreOptions(exclude = "--a")
+class DropA extends Base { }
+
+@IgnoreOptions(ignoreAll = true, include = "--b")
+class OnlyB extends Base { }
+
+// Filtering mixin-provided options: annotate the mixin class
+@IgnoreOptions(exclude = "--m")
+class MixinOpts {
+    @Option(names = "--m") int m;
+}
+
+class WithMixin implements Runnable {
+    @Mixin MixinOpts mixin;
+    public void run() {}
+}
+```
+
+Matching rules can be option names (e.g. `"--b"`, `"-b"`) or field names via `"field:<name>"`.
+
 Testing
 -------
 

@@ -3,6 +3,7 @@ package me.bechberger.minicli;
 import me.bechberger.minicli.annotations.Mixin;
 import me.bechberger.minicli.annotations.Option;
 import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.minicli.annotations.IgnoreOptions;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -32,6 +33,12 @@ final class CommandModel {
         // Initialize mixins (same behavior as before)
         for (Field field : MiniCli.allFields(cmd.getClass())) {
             if (field.getAnnotation(Mixin.class) != null) {
+                if (Modifier.isStatic(field.getModifiers())) {
+                    throw new FieldIsFinalException("@Mixin field must not be static: " + field);
+                }
+                if (Modifier.isFinal(field.getModifiers())) {
+                    throw new FieldIsFinalException("@Mixin field must not be final: " + field);
+                }
                 field.setAccessible(true);
                 Object mixin = field.getType().getDeclaredConstructor().newInstance();
                 field.set(cmd, mixin);
@@ -50,21 +57,72 @@ final class CommandModel {
         }
     }
 
-    private static void collectOptionsFrom(Object holder,
-                                           Map<String, MiniCli.OptionMeta> optionsByName,
-                                           Map<Field, MiniCli.OptionMeta> optionByField,
-                                           List<MiniCli.OptionMeta> options) {
-        for (Field field : MiniCli.allFields(holder.getClass())) {
+    private static boolean matchesIgnoreRule(String rule, Field field, Option opt) {
+        if (rule == null || rule.isBlank()) return false;
+        if (rule.startsWith("field:")) {
+            return field.getName().equals(rule.substring("field:".length()));
+        }
+        for (String n : opt.names()) {
+            if (n.equals(rule)) return true;
+        }
+        return false;
+    }
+
+    private static boolean matchesAnyRule(String[] rules, Field field, Option opt) {
+        if (rules == null) return false;
+        for (String rule : rules) {
+            if (matchesIgnoreRule(rule, field, opt)) return true;
+        }
+        return false;
+    }
+
+    private static boolean shouldIncludeOption(IgnoreOptions ignore, Field field, Option opt) {
+        if (ignore == null) return true;
+        if (ignore.ignoreAll()) {
+            // ignoreAll means: only include if explicitly included
+            return matchesAnyRule(ignore.include(), field, opt);
+        }
+
+        // include wins over exclude
+        if (matchesAnyRule(ignore.include(), field, opt)) return true;
+
+        if (matchesAnyRule(ignore.exclude(), field, opt)) return false;
+        //noinspection deprecation
+        return !matchesAnyRule(ignore.options(), field, opt);
+    }
+
+    private static void addDeclaredOptions(Object holder,
+                                          Class<?> declaredIn,
+                                          IgnoreOptions ignore,
+                                          Map<String, MiniCli.OptionMeta> optionsByName,
+                                          Map<Field, MiniCli.OptionMeta> optionByField,
+                                          List<MiniCli.OptionMeta> options) {
+        for (Field field : declaredIn.getDeclaredFields()) {
             field.setAccessible(true);
             Option opt = field.getAnnotation(Option.class);
-            if (opt == null) {
-                continue;
-            }
+            if (opt == null) continue;
             if (Modifier.isFinal(field.getModifiers())) {
                 throw new FieldIsFinalException("@Option field must not be final: " + field);
             }
+            if (!shouldIncludeOption(ignore, field, opt)) {
+                continue;
+            }
             registerOptionMeta(new MiniCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options);
         }
+    }
+
+    private static void collectOptionsFrom(Object holder,
+                                          Map<String, MiniCli.OptionMeta> optionsByName,
+                                          Map<Field, MiniCli.OptionMeta> optionByField,
+                                          List<MiniCli.OptionMeta> options) {
+        IgnoreOptions ignore = holder.getClass().getAnnotation(IgnoreOptions.class);
+
+        // inherited first (older classes first), then declared: declared overrides inherited
+        Class<?> type = holder.getClass();
+        for (Class<?> current = type.getSuperclass(); current != null && current != Object.class; current = current.getSuperclass()) {
+            addDeclaredOptions(holder, current, ignore, optionsByName, optionByField, options);
+        }
+        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options);
     }
 
     static CommandModel of(Object cmd) throws Exception {

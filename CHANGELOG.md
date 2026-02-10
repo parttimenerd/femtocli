@@ -8,11 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-### Changed
-### Deprecated
-### Removed
+- Add `@IgnoreOptions` to ignore options from parent commands or mixin in subcommands
+
 ### Fixed
-### Security
+- Boolean options now accept explicit values as separate tokens (e.g. `--flag false`), in addition to `--flag` and `--flag=false`
 
 ## [0.1.9] - 2026-01-31
 
