@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>me.bechberger.util</groupId>
-    <artifactId>minicli-examples</artifactId>
+    <artifactId>femtocli-examples</artifactId>
     <version>0.1.13</version>
 
-    <name>minicli examples</name>
+    <name>femtocli examples</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -31,10 +31,10 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Use the current workspace build of minicli (same version as this examples module). -->
+        <!-- Use the current workspace build of femtocli (same version as this examples module). -->
         <dependency>
             <groupId>me.bechberger.util</groupId>
-            <artifactId>minicli</artifactId>
+            <artifactId>femtocli</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

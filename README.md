@@ -1,6 +1,6 @@
-# minicli
+# femtocli
 
-[![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/minicli)](https://central.sonatype.com/artifact/me.bechberger.util/minicli)
+[![CI](https://github.com/parttimenerd/femtocli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/femtocli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/femtocli)](https://central.sonatype.com/artifact/me.bechberger.util/femtocli)
 
 Powerful yet minimal command line interface framework for Java applications and Java agents.
 
@@ -43,13 +43,13 @@ Quick Start
 
 This is the smallest realistic setup: one top-level command with a subcommand and a required option.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/QuickStart.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/QuickStart.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 import java.util.concurrent.Callable;
 
@@ -76,20 +76,20 @@ public class QuickStart implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new QuickStart(), args);
+        FemtoCli.run(new QuickStart(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 Try it:
 
-<!-- @minicli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
+<!-- @femtocli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
 ```sh
 > ./examples/run.sh QuickStart greet --name=World --count=1
 Hello, World!
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 Maven dependency
 ----------------
@@ -99,7 +99,7 @@ Add the library as a dependency in your project (< 55KB):
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
-  <artifactId>minicli</artifactId>
+  <artifactId>femtocli</artifactId>
   <version>0.1.13</version>
 </dependency>
 ```
@@ -109,7 +109,7 @@ And for the minimal version without debug metadata (< 45KB):
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
-  <artifactId>minicli-minimal</artifactId>
+  <artifactId>femtocli-minimal</artifactId>
   <version>0.1.13</version>
 </dependency>
 ```
@@ -120,17 +120,17 @@ Examples
 The examples below are generated from the `examples/` subproject and show many of the important
 features in action.
 
-### Quick start (subcommands + required options) [(source)](examples/src/main/java/me/bechberger/minicli/examples/QuickStart.java)
+### Quick start (subcommands + required options) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/QuickStart.java)
 
 A tiny but realistic app: a top-level command with a `greet` subcommand, a required `--name`, and a defaulted `--count`.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/QuickStart.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/QuickStart.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 import java.util.concurrent.Callable;
 
@@ -157,24 +157,24 @@ public class QuickStart implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new QuickStart(), args);
+        FemtoCli.run(new QuickStart(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 Try it:
 
-<!-- @minicli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
+<!-- @femtocli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
 ```sh
 > ./examples/run.sh QuickStart greet --name=World --count=1
 Hello, World!
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 And its help screens:
 
-<!-- @minicli:run-java class="QuickStart" args=["--help"] -->
+<!-- @femtocli:run-java class="QuickStart" args=["--help"] -->
 ```sh
 > ./examples/run.sh QuickStart --help
 Usage: myapp [-hV] [COMMAND]
@@ -184,9 +184,9 @@ My CLI application
 Commands:
   greet  Greet a person
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="QuickStart" args=["greet","--help"] -->
+<!-- @femtocli:run-java class="QuickStart" args=["greet","--help"] -->
 ```sh
 > ./examples/run.sh QuickStart greet --help
 Usage: myapp greet [-hV] --name=<name> [--count=<count>]
@@ -196,18 +196,18 @@ Greet a person
   -n, --name=<name>      Name to greet (required)
   -V, --version          Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Subcommands as methods [(source)](examples/src/main/java/me/bechberger/minicli/examples/SubcommandMethod.java)
+### Subcommands as methods [(source)](examples/src/main/java/me/bechberger/femtocli/examples/SubcommandMethod.java)
 
 Define a subcommand as a method annotated with `@Command`.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/SubcommandMethod.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/SubcommandMethod.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
 
 @Command(name = "myapp")
 public class SubcommandMethod implements Runnable {
@@ -222,29 +222,29 @@ public class SubcommandMethod implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new SubcommandMethod(), args);
+        FemtoCli.run(new SubcommandMethod(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="SubcommandMethod" args=["status"] -->
+<!-- @femtocli:run-java class="SubcommandMethod" args=["status"] -->
 ```sh
 > ./examples/run.sh SubcommandMethod status
 OK
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Positional parameters [(source)](examples/src/main/java/me/bechberger/minicli/examples/PositionalParameters.java)
+### Positional parameters [(source)](examples/src/main/java/me/bechberger/femtocli/examples/PositionalParameters.java)
 
 Use `@Parameters` for values that are identified by position (instead of an option name).
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/PositionalParameters.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/PositionalParameters.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Parameters;
 
 import java.util.List;
 
@@ -266,21 +266,21 @@ public class PositionalParameters implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new PositionalParameters(), args);
+        FemtoCli.run(new PositionalParameters(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="PositionalParameters" args=["in.txt","arg1","arg2"] -->
+<!-- @femtocli:run-java class="PositionalParameters" args=["in.txt","arg1","arg2"] -->
 ```sh
 > ./examples/run.sh PositionalParameters in.txt arg1 arg2
 File: in.txt
 Args: [arg1, arg2]
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="PositionalParameters" args=["--help"] -->
+<!-- @femtocli:run-java class="PositionalParameters" args=["--help"] -->
 ```sh
 > ./examples/run.sh PositionalParameters --help
 Usage: positionalparameters [-hV] FILE [ARGS...]
@@ -289,20 +289,20 @@ Usage: positionalparameters [-hV] FILE [ARGS...]
   -h, --help       Show this help message and exit.
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### End-of-options marker (`--`) [(source)](examples/src/main/java/me/bechberger/minicli/examples/EndOfOptionsMarker.java)
+### End-of-options marker (`--`) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/EndOfOptionsMarker.java)
 
 Use `--` to stop option parsing. Any following tokens are treated as positional parameters, even if they start with `-`.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/EndOfOptionsMarker.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/EndOfOptionsMarker.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
-import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
 
 import java.util.List;
 
@@ -327,30 +327,30 @@ public class EndOfOptionsMarker implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.run(new EndOfOptionsMarker(), args));
+        System.exit(FemtoCli.run(new EndOfOptionsMarker(), args));
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="EndOfOptionsMarker" args=["--name","test","--","--not-an-option","-also-not"] -->
+<!-- @femtocli:run-java class="EndOfOptionsMarker" args=["--name","test","--","--not-an-option","-also-not"] -->
 ```sh
 > ./examples/run.sh EndOfOptionsMarker --name test -- --not-an-option -also-not
 name=test
 args=[--not-an-option, -also-not]
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Multi-value options (lists + split) [(source)](examples/src/main/java/me/bechberger/minicli/examples/MultiValueOptions.java)
+### Multi-value options (lists + split) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/MultiValueOptions.java)
 
 Repeat an option (`-I a -I b`) or use `split` for delimited values (`--tags=a,b`).
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/MultiValueOptions.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/MultiValueOptions.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Option;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -371,32 +371,32 @@ public class MultiValueOptions implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new MultiValueOptions(), args);
+        FemtoCli.run(new MultiValueOptions(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="MultiValueOptions" args=["--tags=a,b,c","-I","a","-I","b","--tags","d,e"] -->
+<!-- @femtocli:run-java class="MultiValueOptions" args=["--tags=a,b,c","-I","a","-I","b","--tags","d,e"] -->
 ```sh
 > ./examples/run.sh MultiValueOptions --tags=a,b,c -I a -I b --tags d,e
 Include Dirs: [a, b]
 Tags: [a, b, c, d, e]
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Arrays and lists [(source)](examples/src/main/java/me/bechberger/minicli/examples/ArraysAndLists.java)
+### Arrays and lists [(source)](examples/src/main/java/me/bechberger/femtocli/examples/ArraysAndLists.java)
 
 Multi-value options and parameters can be modeled as arrays or `List`.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/ArraysAndLists.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/ArraysAndLists.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
-import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
 
 import java.util.Arrays;
 import java.util.List;
@@ -424,33 +424,33 @@ public class ArraysAndLists implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.run(new ArraysAndLists(), args));
+        System.exit(FemtoCli.run(new ArraysAndLists(), args));
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="ArraysAndLists" args=["--xs=a,b","--ys=c,d","rest1","rest2"] -->
+<!-- @femtocli:run-java class="ArraysAndLists" args=["--xs=a,b","--ys=c,d","rest1","rest2"] -->
 ```sh
 > ./examples/run.sh ArraysAndLists --xs=a,b --ys=c,d rest1 rest2
 xs=[a, b]
 ys=[c, d]
 rest=[rest1, rest2]
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Mixins (reusable option groups) [(source)](examples/src/main/java/me/bechberger/minicli/examples/MixinsAndSubcommands.java)
+### Mixins (reusable option groups) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/MixinsAndSubcommands.java)
 
 Use `@Mixin` to share common option groups across commands/subcommands.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/MixinsAndSubcommands.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/MixinsAndSubcommands.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Mixin;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Mixin;
+import me.bechberger.femtocli.annotations.Option;
 
 /**
  * Shows how to use mixins to share options between subcommands. Run with "a -v" or "b -v" to see the effect.
@@ -488,20 +488,20 @@ public class MixinsAndSubcommands implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new MixinsAndSubcommands(), args);
+        FemtoCli.run(new MixinsAndSubcommands(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="MixinsAndSubcommands" args=["a"] -->
+<!-- @femtocli:run-java class="MixinsAndSubcommands" args=["a"] -->
 ```sh
 > ./examples/run.sh MixinsAndSubcommands a
 Verbose: false
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="MixinsAndSubcommands" args=["--help"] -->
+<!-- @femtocli:run-java class="MixinsAndSubcommands" args=["--help"] -->
 ```sh
 > ./examples/run.sh MixinsAndSubcommands --help
 Usage: mixins [-hV] [COMMAND]
@@ -511,9 +511,9 @@ Commands:
   a  
   b  
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="MixinsAndSubcommands" args=["a","--help"] -->
+<!-- @femtocli:run-java class="MixinsAndSubcommands" args=["a","--help"] -->
 ```sh
 > ./examples/run.sh MixinsAndSubcommands a --help
 Usage: mixins a [-hV] [--verbose]
@@ -521,19 +521,19 @@ Usage: mixins a [-hV] [--verbose]
   -v, --verbose
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Hide commands and options from help output [(source)](examples/src/main/java/me/bechberger/minicli/examples/HiddenCommandsAndOptions.java)
+### Hide commands and options from help output [(source)](examples/src/main/java/me/bechberger/femtocli/examples/HiddenCommandsAndOptions.java)
 
 Use `hidden=true` on `@Command` and `@Option` if you want to keep functionality available but omit it from help output.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/HiddenCommandsAndOptions.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/HiddenCommandsAndOptions.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 /**
  * Demonstrates how to hide commands and options from help output.
@@ -578,13 +578,13 @@ public class HiddenCommandsAndOptions implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.run(new HiddenCommandsAndOptions(), args));
+        System.exit(FemtoCli.run(new HiddenCommandsAndOptions(), args));
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="HiddenCommandsAndOptions" args=["--help"] -->
+<!-- @femtocli:run-java class="HiddenCommandsAndOptions" args=["--help"] -->
 ```sh
 > ./examples/run.sh HiddenCommandsAndOptions --help
 Usage: hidden [-hV] [--verbose] [COMMAND]
@@ -595,20 +595,20 @@ Hide commands and options in help
 Commands:
   status  Show status
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Help labels + defaults [(source)](examples/src/main/java/me/bechberger/minicli/examples/HelpLabelsAndDefaults.java)
+### Help labels + defaults [(source)](examples/src/main/java/me/bechberger/femtocli/examples/HelpLabelsAndDefaults.java)
 
 Control how values show up in help output (`paramLabel`) and document defaults with `${DEFAULT-VALUE}`.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/HelpLabelsAndDefaults.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/HelpLabelsAndDefaults.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
-import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
 
 import java.nio.file.Path;
 
@@ -646,22 +646,22 @@ public class HelpLabelsAndDefaults implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new HelpLabelsAndDefaults(), args);
+        FemtoCli.run(new HelpLabelsAndDefaults(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="HelpLabelsAndDefaults" args=["in.txt"] -->
+<!-- @femtocli:run-java class="HelpLabelsAndDefaults" args=["in.txt"] -->
 ```sh
 > ./examples/run.sh HelpLabelsAndDefaults in.txt
 Input: in.txt
 Output: out.txt
 Level: info
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="HelpLabelsAndDefaults" args=["--help"] -->
+<!-- @femtocli:run-java class="HelpLabelsAndDefaults" args=["--help"] -->
 ```sh
 > ./examples/run.sh HelpLabelsAndDefaults --help
 Usage: help-labels [-hV] [--output=FILE] INPUT [LEVEL]
@@ -672,20 +672,20 @@ Usage: help-labels [-hV] [--output=FILE] INPUT [LEVEL]
                    Write result to FILE (default: out.txt)
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Spec injection (access to runtime) [(source)](examples/src/main/java/me/bechberger/minicli/examples/SpecInjection.java)
+### Spec injection (access to runtime) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/SpecInjection.java)
 
 Declare a plain `Spec` field to access configured streams and usage rendering.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/SpecInjection.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/SpecInjection.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.Spec;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.Spec;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 import java.time.Duration;
 
@@ -693,7 +693,7 @@ import java.time.Duration;
  * Example showcasing injection of the {@link Spec} object.
  * <p>
  * The Spec object contains the configured input and output streams,
- * as well as a method to print usage help with the same formatting as the current MiniCli run.
+ * as well as a method to print usage help with the same formatting as the current FemtoCli run.
  */
 @Command(name = "inspect", description = "Example that uses Spec", mixinStandardHelpOptions = true)
 public class SpecInjection implements Runnable {
@@ -708,18 +708,18 @@ public class SpecInjection implements Runnable {
     public void run() {
         // Use the configured streams
         spec.out.println("interval = " + interval.toMillis());
-        // Print usage with the same formatting as the current MiniCli run
+        // Print usage with the same formatting as the current FemtoCli run
         spec.usage();
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new SpecInjection(), args);
+        FemtoCli.run(new SpecInjection(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="SpecInjection" args=["--interval","10ms"] -->
+<!-- @femtocli:run-java class="SpecInjection" args=["--interval","10ms"] -->
 ```sh
 > ./examples/run.sh SpecInjection --interval 10ms
 interval = 10
@@ -729,28 +729,28 @@ Example that uses Spec
   -i, --interval=<interval>    Sampling interval (default: 10ms)
   -V, --version                Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Agent args mode (comma-separated arguments) [(source)](examples/src/main/java/me/bechberger/minicli/examples/AgentCli.java)
+### Agent args mode (comma-separated arguments) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/AgentCli.java)
 
 Useful when you can only pass a single string (e.g., Java agent arguments) and still want subcommands/options.
 
 **Why this is special:** Java agents typically only get a single `-javaagent:...=ARGSTRING` argument, and that string is commonly encoded as comma-separated key/value pairs. To my knowledge, there isn’t another Java CLI parsing library that supports this “agent args” style parsing out of the box (including escaping/quoting edge cases) while still giving you subcommands, help/version, and type conversion.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/AgentCli.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/AgentCli.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
-import me.bechberger.minicli.annotations.Parameters;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
 
 /**
- * Example showcasing MiniCli agent args mode (comma-separated arguments).
+ * Example showcasing FemtoCli agent args mode (comma-separated arguments).
  * <p>
  * Example invocations:
  * <ul>
@@ -810,15 +810,15 @@ public class AgentCli implements Runnable {
         // Demonstrate agent mode if a single agent-args string is passed,
         // otherwise fall back to normal argv parsing.
         if (args.length == 1) {
-            System.exit(MiniCli.runAgent(new AgentCli(), args[0]));
+            System.exit(FemtoCli.runAgent(new AgentCli(), args[0]));
         }
-        System.exit(MiniCli.run(new AgentCli(), args));
+        System.exit(FemtoCli.run(new AgentCli(), args));
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="AgentCli" args=["--help"] -->
+<!-- @femtocli:run-java class="AgentCli" args=["--help"] -->
 ```sh
 > ./examples/run.sh AgentCli --help
 Usage: agent-cli,[hV],[COMMAND]
@@ -829,25 +829,25 @@ Commands:
   start  Start recording
   stop   Stop recording
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 Agent invocations (single comma-separated string):
 
-<!-- @minicli:run-java class="AgentCli" args=["start,interval=1ms"] -->
+<!-- @femtocli:run-java class="AgentCli" args=["start,interval=1ms"] -->
 ```sh
 > ./examples/run.sh AgentCli start,interval=1ms
 start: interval=PT0.001S
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="AgentCli" args=["stop,jfr,output=file.jfr,verbose"] -->
+<!-- @femtocli:run-java class="AgentCli" args=["stop,jfr,output=file.jfr,verbose"] -->
 ```sh
 > ./examples/run.sh AgentCli stop,jfr,output=file.jfr,verbose
 stop: mode=jfr, output=file.jfr, verbose=true
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="AgentCli" args=["stop,help"] -->
+<!-- @femtocli:run-java class="AgentCli" args=["stop,help"] -->
 ```sh
 > ./examples/run.sh AgentCli stop,help
 Usage: agent-cli,stop,[hV],output=<output>,[verbose],<mode>
@@ -859,24 +859,24 @@ Options:
   v, verbose         Verbose
   V, version         Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 
-### Custom type converters [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomTypeConverters.java)
+### Custom type converters [(source)](examples/src/main/java/me/bechberger/femtocli/examples/CustomTypeConverters.java)
 
-Minicli supports parsing the primitive types and their boxing wrappers, as well as Duration and Path, 
+Femtocli supports parsing the primitive types and their boxing wrappers, as well as Duration and Path, 
 but if you want more, you can bring your own converters:
 
 Register type converters globally, or declare a per-option converter (class or method).
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/CustomTypeConverters.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/CustomTypeConverters.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.TypeConverter;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.TypeConverter;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 import java.time.Duration;
 
@@ -921,34 +921,34 @@ public class CustomTypeConverters implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.builder()
+        FemtoCli.builder()
                 .registerType(java.time.Duration.class, java.time.Duration::parse)
                 .run(new CustomTypeConverters(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="CustomTypeConverters" args=["--name=max","--turn","on","--timeout=PT10S"] -->
+<!-- @femtocli:run-java class="CustomTypeConverters" args=["--name=max","--turn","on","--timeout=PT10S"] -->
 ```sh
 > ./examples/run.sh CustomTypeConverters --name=max --turn on --timeout=PT10S
 Name: MAX
 Turn: true
 Timeout: PT10S
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Enums + completion candidates placeholder [(source)](examples/src/main/java/me/bechberger/minicli/examples/EnumsAndCompletionCandidates.java)
+### Enums + completion candidates placeholder [(source)](examples/src/main/java/me/bechberger/femtocli/examples/EnumsAndCompletionCandidates.java)
 
 Enum options automatically list completion candidates in help output.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/EnumsAndCompletionCandidates.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/EnumsAndCompletionCandidates.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 @Command(name = "enums")
 public class EnumsAndCompletionCandidates implements Runnable {
@@ -964,27 +964,27 @@ public class EnumsAndCompletionCandidates implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new EnumsAndCompletionCandidates(), args);
+        FemtoCli.run(new EnumsAndCompletionCandidates(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="EnumsAndCompletionCandidates" args=[] -->
+<!-- @femtocli:run-java class="EnumsAndCompletionCandidates" args=[] -->
 ```sh
 > ./examples/run.sh EnumsAndCompletionCandidates
 Mode: safe
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="EnumsAndCompletionCandidates" args=["--mode","fast"] -->
+<!-- @femtocli:run-java class="EnumsAndCompletionCandidates" args=["--mode","fast"] -->
 ```sh
 > ./examples/run.sh EnumsAndCompletionCandidates --mode fast
 Mode: fast
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="EnumsAndCompletionCandidates" args=["--help"] -->
+<!-- @femtocli:run-java class="EnumsAndCompletionCandidates" args=["--help"] -->
 ```sh
 > ./examples/run.sh EnumsAndCompletionCandidates --help
 Usage: enums [-hV] [--mode=<mode>]
@@ -993,22 +993,22 @@ Usage: enums [-hV] [--mode=<mode>]
                    Mode (fast, safe), default: safe
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Custom header, footer and synopsis [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomHeaderAndSynopsis.java)
+### Custom header, footer and synopsis [(source)](examples/src/main/java/me/bechberger/femtocli/examples/CustomHeaderAndSynopsis.java)
 
 Customize the help screen with a header and a fully custom synopsis.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/CustomHeaderAndSynopsis.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/CustomHeaderAndSynopsis.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 /**
- * A command with a custom header and synopsis.
+ * A command with a custom header, synopsis and footer.
  * The header is printed above the usage message, and the synopsis replaces the default usage line.
  */
 @Command(
@@ -1030,13 +1030,13 @@ public class CustomHeaderAndSynopsis implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new CustomHeaderAndSynopsis(), args);
+        FemtoCli.run(new CustomHeaderAndSynopsis(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="CustomHeaderAndSynopsis" args=["--help"] -->
+<!-- @femtocli:run-java class="CustomHeaderAndSynopsis" args=["--help"] -->
 ```sh
 > ./examples/run.sh CustomHeaderAndSynopsis --help
 My Tool
@@ -1050,20 +1050,20 @@ Process files
 Examples:
   mytool --flag
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Ignore options (inheritance / mixins) [(source)](examples/src/main/java/me/bechberger/minicli/examples/IgnoreOptionsExample.java)
+### Ignore options (inheritance / mixins) [(source)](examples/src/main/java/me/bechberger/femtocli/examples/IgnoreOptionsExample.java)
 
 Filter inherited options (or mixin-provided options) from the effective command surface.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/IgnoreOptionsExample.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/IgnoreOptionsExample.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.IgnoreOptions;
-import me.bechberger.minicli.annotations.Mixin;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.IgnoreOptions;
+import me.bechberger.femtocli.annotations.Mixin;
+import me.bechberger.femtocli.annotations.Option;
 
 /**
  * Example for {@code @IgnoreOptions}:
@@ -1115,13 +1115,13 @@ public class IgnoreOptionsExample {
         //   --a 1      (unknown option, ignored from base)
         //   --m 2      (unknown option, ignored from mixin)
         //   --b 3
-        MiniCli.run(new Cmd(), args);
+        FemtoCli.run(new Cmd(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="IgnoreOptionsExample" args=["--help"] -->
+<!-- @femtocli:run-java class="IgnoreOptionsExample" args=["--help"] -->
 ```sh
 > ./examples/run.sh IgnoreOptionsExample --help
 Usage: cmd [-hV] [--b=<b>]
@@ -1129,20 +1129,20 @@ Usage: cmd [-hV] [--b=<b>]
   -h, --help       Show this help message and exit.
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Custom verifiers [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomTypeVerifiers.java)
+### Custom verifiers [(source)](examples/src/main/java/me/bechberger/femtocli/examples/CustomTypeVerifiers.java)
 
 Validate values and produce user-friendly errors.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/CustomTypeVerifiers.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/CustomTypeVerifiers.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.VerifierException;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.VerifierException;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 class Helpers {
     static void checkPort(int p) {
@@ -1162,13 +1162,13 @@ public class CustomTypeVerifiers implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new CustomTypeVerifiers(), args);
+        FemtoCli.run(new CustomTypeVerifiers(), args);
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="CustomTypeVerifiers" args=["--port","0"] -->
+<!-- @femtocli:run-java class="CustomTypeVerifiers" args=["--port","0"] -->
 ```sh
 > ./examples/run.sh CustomTypeVerifiers --port 0
 Usage: verifiers [-hV] [--port=<port>]
@@ -1177,17 +1177,17 @@ Usage: verifiers [-hV] [--port=<port>]
   -V, --version    Print version information and exit.
 Error: port out of range
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Global configuration [(source)](examples/src/main/java/me/bechberger/minicli/examples/GlobalConfiguration.java)
+### Global configuration [(source)](examples/src/main/java/me/bechberger/femtocli/examples/GlobalConfiguration.java)
 
 Set global defaults like version strings and usage formatting.
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/GlobalConfiguration.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/GlobalConfiguration.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
+import me.bechberger.femtocli.FemtoCli;
 
 public class GlobalConfiguration implements Runnable {
 
@@ -1196,7 +1196,7 @@ public class GlobalConfiguration implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.builder()
+        FemtoCli.builder()
                 .commandConfig(c -> {
                     c.version = "1.2.3";
                 })
@@ -1204,26 +1204,26 @@ public class GlobalConfiguration implements Runnable {
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="GlobalConfiguration" args=["--version"] -->
+<!-- @femtocli:run-java class="GlobalConfiguration" args=["--version"] -->
 ```sh
 > ./examples/run.sh GlobalConfiguration --version
 1.2.3
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-### Boolean options with explicit values [(source)](examples/src/main/java/me/bechberger/minicli/examples/BooleanExplicitValues.java)
+### Boolean options with explicit values [(source)](examples/src/main/java/me/bechberger/femtocli/examples/BooleanExplicitValues.java)
 
 Allow boolean options to accept explicit values (for cases where a pure flag isn’t enough).
 
-<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/BooleanExplicitValues.java" -->
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/BooleanExplicitValues.java" -->
 ```java
-package me.bechberger.minicli.examples;
+package me.bechberger.femtocli.examples;
 
-import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.annotations.Command;
-import me.bechberger.minicli.annotations.Option;
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
 
 /**
  * Demonstrates boolean options as flags and with explicit values.
@@ -1251,21 +1251,21 @@ public class BooleanExplicitValues implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(MiniCli.run(new BooleanExplicitValues(), args));
+        System.exit(FemtoCli.run(new BooleanExplicitValues(), args));
     }
 }
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="BooleanExplicitValues" args=["--boxed=false","--prim","false"] -->
+<!-- @femtocli:run-java class="BooleanExplicitValues" args=["--boxed=false","--prim","false"] -->
 ```sh
 > ./examples/run.sh BooleanExplicitValues --boxed=false --prim false
 boxed=false
 prim=false
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
-<!-- @minicli:run-java class="BooleanExplicitValues" args=["--help"] -->
+<!-- @femtocli:run-java class="BooleanExplicitValues" args=["--help"] -->
 ```sh
 > ./examples/run.sh BooleanExplicitValues --help
 Usage: bools [-hV] [--boxed] [--prim]
@@ -1275,13 +1275,13 @@ Boolean option parsing example
       --prim       Primitive boolean (boolean)
   -V, --version    Print version information and exit.
 ```
-<!-- @minicli:end -->
+<!-- @femtocli:end -->
 
 Support, Feedback, Contributing
 -------------------------------
 
 This project is open to feature requests/suggestions, bug reports etc.
-via [GitHub](https://github.com/parttimenerd/minicli/issues) issues.
+via [GitHub](https://github.com/parttimenerd/femtocli/issues) issues.
 Contribution and feedback are encouraged and always welcome.
 
 License

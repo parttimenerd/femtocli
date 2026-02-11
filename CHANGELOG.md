@@ -7,21 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
 ### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+- Rename to femtocli, as there is already a CLI library named FemtoCli for PHP
 
 ## [0.1.13] - 2026-02-11
-
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
 
 ## [0.1.12] - 2026-02-11
 
@@ -54,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.9] - 2026-01-31
 
 ### Added
-- Added basic `MiniCLI#run` method
+- Added basic `FemtoCli#run` method
 
 ### Fixed
 - Subcommand handling in help

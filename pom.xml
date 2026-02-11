@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>me.bechberger.util</groupId>
-    <artifactId>minicli</artifactId>
+    <artifactId>femtocli</artifactId>
     <version>0.1.13</version>
 
-    <name>minicli</name>
-    <url>https://github.com/parttimenerd/minicli</url>
+    <name>femtocli</name>
+    <url>https://github.com/parttimenerd/femtocli</url>
     <description>A small CLI library with subcommands</description>
 
     <licenses>
@@ -28,9 +28,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git@github.com:parttimenerd/minicli.git</connection>
-        <developerConnection>scm:git:https://github.com/parttimenerd/minicli.git</developerConnection>
-        <url>https://github.com/parttimenerd/minicli</url>
+        <connection>scm:git:git@github.com:parttimenerd/femtocli.git</connection>
+        <developerConnection>scm:git:https://github.com/parttimenerd/femtocli.git</developerConnection>
+        <url>https://github.com/parttimenerd/femtocli</url>
     </scm>
 
     <distributionManagement>
@@ -195,7 +195,7 @@
         <profile>
             <id>minimal</id>
             <build>
-                <finalName>minicli</finalName>
+                <finalName>femtocli</finalName>
                 <plugins>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>

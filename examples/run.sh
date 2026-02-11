@@ -15,7 +15,7 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 EXAMPLES_DIR="$SCRIPT_DIR"
 REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-JAR="$EXAMPLES_DIR/target/minicli-examples.jar"
+JAR="$EXAMPLES_DIR/target/femtocli-examples.jar"
 
 usage() {
   cat <<'EOF'
@@ -23,10 +23,10 @@ Usage:
   ./run.sh ClassName [args...]
   ./run.sh --agent ClassName "agentArgsString"
 
-Runs an example from the examples module via examples/target/minicli-examples.jar.
+Runs an example from the examples module via examples/target/femtocli-examples.jar.
 If the jar doesn't exist yet, it will be built first.
 
-ClassName can be fully-qualified (me.bechberger.minicli.examples.QuickStart)
+ClassName can be fully-qualified (me.bechberger.femtocli.examples.QuickStart)
 or short (QuickStart), in which case the examples package is added automatically.
 EOF
 }
@@ -53,7 +53,7 @@ shift
 if echo "$CLS" | grep -q '\.'; then
   FQCN="$CLS"
 else
-  FQCN="me.bechberger.minicli.examples.$CLS"
+  FQCN="me.bechberger.femtocli.examples.$CLS"
 fi
 
 # Build jar if needed

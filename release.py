@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bump version and deploy minicli library.
+Bump version and deploy femtocli library.
 
 This script:
 1. Reads the current version from pom.xml
@@ -12,7 +12,7 @@ This script:
 7. Creates a git tag and commits the changes
 
 Minimal artifact release:
-- The minimal artifact is published as a separate artifactId: `minicli-minimal`
+- The minimal artifact is published as a separate artifactId: `femtocli-minimal`
 - It is built by copying the repository into a temporary folder and patching pom.xml
   (artifactId + minimal compiler flags), then deploying from there.
 """
@@ -98,24 +98,24 @@ class VersionBumper:
     # README directive rendering
     # -------------------------
 
-    _DIRECTIVE_RE = re.compile(r"<!--\s*@minicli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->")
-    _END_MARKER_RE = re.compile(r"<!--\s*@minicli:end\s*-->")
+    _DIRECTIVE_RE = re.compile(r"<!--\s*@femtocli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->")
+    _END_MARKER_RE = re.compile(r"<!--\s*@femtocli:end\s*-->")
 
     def render_readme_directives(self, *, readme_path: Optional[Path] = None, check: bool = True) -> bool:
         """Render README directives in-place.
 
         A directive expands to a *block* of markdown delimited by:
 
-            <!-- @minicli:<kind> ... -->
+            <!-- @femtocli:<kind> ... -->
             ... generated content ...
-            <!-- @minicli:end -->
+            <!-- @femtocli:end -->
 
         Only the content between the directive line and the end marker is replaced.
 
         Directives:
         - include-java: include the contents of a Java file
-          <!-- @minicli:include-java path="examples/src/main/java/.../QuickStart.java" -->
-          <!-- @minicli:end -->
+          <!-- @femtocli:include-java path="examples/src/main/java/.../QuickStart.java" -->
+          <!-- @femtocli:end -->
 
           Optional:
           - region="name" to include only a region delimited by:
@@ -126,15 +126,15 @@ class VersionBumper:
 
           Class name:
           - Use a fully-qualified class name:
-              <!-- @minicli:run-java class="me.bechberger.minicli.examples.QuickStart" args="--help" -->
-          - Or use a short name (auto-prefixed with "me.bechberger.minicli.examples."):
-              <!-- @minicli:run-java class="QuickStart" args="--help" -->
+              <!-- @femtocli:run-java class="me.bechberger.femtocli.examples.QuickStart" args="--help" -->
+          - Or use a short name (auto-prefixed with "me.bechberger.femtocli.examples."):
+              <!-- @femtocli:run-java class="QuickStart" args="--help" -->
 
           Args:
           - As a single string (shell-split):
-              <!-- @minicli:run-java class="QuickStart" args="greet --name=World --count=1" -->
+              <!-- @femtocli:run-java class="QuickStart" args="greet --name=World --count=1" -->
           - Or as a JSON array of strings (no quoting ambiguity):
-              <!-- @minicli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
+              <!-- @femtocli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
 
           The rendered output uses a single `sh` code fence and starts with a
           copy/pastable command line using `./examples/run.sh`.
@@ -150,10 +150,10 @@ class VersionBumper:
 
         original = target.read_text()
 
-        # Ensure the current workspace build of minicli is available to the examples module.
+        # Ensure the current workspace build of femtocli is available to the examples module.
         # The examples/pom.xml depends on ${project.version}, so installing here guarantees
         # that README rendering uses the current sources (not a previously released version).
-        self.run_command(['mvn', '-q', 'install', '-DskipTests'], 'Installing minicli (for README rendering)', cwd=self.project_root)
+        self.run_command(['mvn', '-q', 'install', '-DskipTests'], 'Installing femtocli (for README rendering)', cwd=self.project_root)
 
         # Always rebuild the examples project so README output stays in sync with sources.
         # This prevents stale jar output if example mains / help text changes.
@@ -222,7 +222,7 @@ class VersionBumper:
 
             # Allow short class names for examples (e.g. "QuickStart") by auto-prefixing.
             if '.' not in cls:
-                fqcn = f"me.bechberger.minicli.examples.{cls}"
+                fqcn = f"me.bechberger.femtocli.examples.{cls}"
             else:
                 fqcn = cls
 
@@ -262,11 +262,11 @@ class VersionBumper:
             body = '> ' + ' '.join(shown_cmd) + '\n' + out
             return fence('sh', body)
 
-        # Block-based replacement: only replace content between directive and <!-- @minicli:end -->
+        # Block-based replacement: only replace content between directive and <!-- @femtocli:end -->
         block_re = re.compile(
-            r'(?P<start><!--\s*@minicli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->)\s*\n'
+            r'(?P<start><!--\s*@femtocli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->)\s*\n'
             r'(?P<body>.*?)'
-            r'(?P<end><!--\s*@minicli:end\s*-->)',
+            r'(?P<end><!--\s*@femtocli:end\s*-->)',
             re.DOTALL,
         )
 
@@ -285,7 +285,7 @@ class VersionBumper:
             except Exception as e:
                 if check:
                     raise
-                new_body = fence('text', f"[minicli] directive error ({kind}): {e}\n")
+                new_body = fence('text', f"[femtocli] directive error ({kind}): {e}\n")
             return m.group('start') + "\n" + new_body + m.group('end')
 
         rendered = re.sub(block_re, replace_block, original)
@@ -489,7 +489,7 @@ class VersionBumper:
         # Get changelog entry for this specific version (after it's been released in CHANGELOG.md)
         changelog_entry = self.get_version_changelog_entry(version)
         if not changelog_entry:
-            changelog_entry = f"Release {version}\n\nSee [CHANGELOG.md](https://github.com/parttimenerd/minicli/blob/main/CHANGELOG.md) for details."
+            changelog_entry = f"Release {version}\n\nSee [CHANGELOG.md](https://github.com/parttimenerd/femtocli/blob/main/CHANGELOG.md) for details."
 
         # Format release notes
         release_notes = f"""
@@ -501,13 +501,13 @@ class VersionBumper:
 ```xml
 <dependency>
     <groupId>me.bechberger.util</groupId>
-    <artifactId>minicli</artifactId>
+    <artifactId>femtocli</artifactId>
     <version>{version}</version>
 </dependency>
 ```
 
 ### Download JAR
-Download `minicli.jar` from the assets below.
+Download `femtocli.jar` from the assets below.
 """
 
         # Create release notes file
@@ -516,17 +516,17 @@ Download `minicli.jar` from the assets below.
 
         try:
             # Build jar paths
-            jar_path = self.project_root / 'target' / 'minicli.jar'
-            minimal_path = self.project_root / 'target' / 'minicli-minimal.jar'
+            jar_path = self.project_root / 'target' / 'femtocli.jar'
+            minimal_path = self.project_root / 'target' / 'femtocli-minimal.jar'
 
             assets = []
             if jar_path.exists():
-                assets.append(str(jar_path) + '#minicli.jar')
+                assets.append(str(jar_path) + '#femtocli.jar')
             else:
                 print(f"⚠ JAR not found at {jar_path}")
 
             if minimal_path.exists():
-                assets.append(str(minimal_path) + '#minicli-minimal.jar')
+                assets.append(str(minimal_path) + '#femtocli-minimal.jar')
             else:
                 print(f"⚠ Minimal JAR not found at {minimal_path}")
 
@@ -642,7 +642,7 @@ Download `minicli.jar` from the assets below.
 
     def _copy_repo_to_temp(self) -> Path:
         """Copy the repository to a temporary folder for the minimal build."""
-        tmp = Path(tempfile.mkdtemp(prefix="minicli-minimal-"))
+        tmp = Path(tempfile.mkdtemp(prefix="femtocli-minimal-"))
         ignore = shutil.ignore_patterns(
             ".git", ".idea", ".mvn", "target", ".release-backup", "__pycache__", ".release-notes.md"
         )
@@ -660,7 +660,7 @@ Download `minicli.jar` from the assets below.
         """Build the minimal artifact (as separate artifactId) in a temp workspace.
 
         Copies the resulting jar into this repo's target/ folder as:
-        - target/minicli-minimal.jar
+        - target/femtocli-minimal.jar
         """
         tmp_repo, _ = self._prepare_minimal_workspace()
         try:
@@ -674,14 +674,14 @@ Download `minicli.jar` from the assets below.
             out_target = self.project_root / 'target'
             out_target.mkdir(parents=True, exist_ok=True)
 
-            # Prefer the project jar name (usually minicli-minimal-<version>.jar).
+            # Prefer the project jar name (usually femtocli-minimal-<version>.jar).
             built_jars = sorted((tmp_repo / 'target').glob('*.jar'))
             chosen = None
             for p in built_jars:
                 # avoid sources/javadoc jars if present
                 if p.name.endswith('-sources.jar') or p.name.endswith('-javadoc.jar'):
                     continue
-                if p.name.startswith('minicli-minimal') and p.name.endswith('.jar'):
+                if p.name.startswith('femtocli-minimal') and p.name.endswith('.jar'):
                     chosen = p
                     break
             if chosen is None:
@@ -691,7 +691,7 @@ Download `minicli.jar` from the assets below.
             if chosen is None:
                 raise RuntimeError("Minimal build succeeded but no jar was found in temp target/")
 
-            dest = out_target / 'minicli-minimal.jar'
+            dest = out_target / 'femtocli-minimal.jar'
             shutil.copy2(chosen, dest)
             print(f"✓ Wrote minimal jar to {dest}")
 
@@ -714,7 +714,7 @@ Download `minicli.jar` from the assets below.
             shutil.rmtree(tmp_repo.parent, ignore_errors=True)
 
     def deploy_release(self, include_minimal: bool):
-        """Deploy to Maven Central, publishing both 'minicli' and 'minicli-minimal'."""
+        """Deploy to Maven Central, publishing both 'femtocli' and 'femtocli-minimal'."""
         # 1) Deploy normal artifact
         self.run_command(
             ['mvn', 'clean', 'deploy', '-P', 'release'],
@@ -771,7 +771,7 @@ Download `minicli.jar` from the assets below.
         """Patch pom.xml in-place for minimal publication as a separate artifactId.
 
         Changes:
-        - artifactId: minicli -> minicli-minimal (first occurrence only)
+        - artifactId: femtocli -> femtocli-minimal (first occurrence only)
         - ensure a `minimal` Maven profile exists that strips debug symbols
 
         Note: this is applied only in a temporary workspace created by the release script.
@@ -780,8 +780,8 @@ Download `minicli.jar` from the assets below.
 
         # Replace only the first occurrence (the project's artifactId)
         content = content.replace(
-            '<artifactId>minicli</artifactId>',
-            '<artifactId>minicli-minimal</artifactId>',
+            '<artifactId>femtocli</artifactId>',
+            '<artifactId>femtocli-minimal</artifactId>',
             1,
         )
 
@@ -839,8 +839,8 @@ Download `minicli.jar` from the assets below.
                     f"{max_bytes} bytes ({max_kib:.1f} KiB) at {path}"
                 )
 
-        check(self.project_root / 'target' / 'minicli.jar', self._NORMAL_JAR_MAX_BYTES, 'Normal build JAR (minicli.jar)')
-        check(self.project_root / 'target' / 'minicli-minimal.jar', self._MINIMAL_JAR_MAX_BYTES, 'Minimal build JAR (minicli-minimal.jar)')
+        check(self.project_root / 'target' / 'femtocli.jar', self._NORMAL_JAR_MAX_BYTES, 'Normal build JAR (femtocli.jar)')
+        check(self.project_root / 'target' / 'femtocli-minimal.jar', self._MINIMAL_JAR_MAX_BYTES, 'Minimal build JAR (femtocli-minimal.jar)')
 
     @staticmethod
     def _extract_region(content: str, region: str, *, path: Path) -> str:
@@ -863,9 +863,9 @@ Download `minicli.jar` from the assets below.
         """Ensure the examples fat jar exists.
 
         The README renderer executes examples via:
-          examples/target/minicli-examples.jar
+          examples/target/femtocli-examples.jar
         """
-        jar = self.project_root / 'examples' / 'target' / 'minicli-examples.jar'
+        jar = self.project_root / 'examples' / 'target' / 'femtocli-examples.jar'
         if jar.exists():
             return
         # Build the examples module jar.
@@ -873,7 +873,7 @@ Download `minicli.jar` from the assets below.
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Bump version and deploy minicli library',
+        description='Bump version and deploy femtocli library',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
@@ -927,7 +927,7 @@ Examples:
     parser.add_argument(
         '--no-minimal',
         action='store_true',
-        help='Skip building/publishing the minimal artifact (separate artifactId minicli-minimal)'
+        help='Skip building/publishing the minimal artifact (separate artifactId femtocli-minimal)'
     )
     parser.add_argument(
         '--build-minimal',
@@ -942,7 +942,7 @@ Examples:
     parser.add_argument(
         '--render-readme',
         action='store_true',
-        help='Render @minicli:* directives in README.md (in-place), then exit'
+        help='Render @femtocli:* directives in README.md (in-place), then exit'
     )
 
     args = parser.parse_args()
@@ -1023,7 +1023,7 @@ Examples:
             print("  • git push")
             print("  • git push --tags")
         if do_github_release:
-            print(f"  • gh release create v{new_version} (with CHANGELOG entry + minicli.jar)")
+            print(f"  • gh release create v{new_version} (with CHANGELOG entry + femtocli.jar)")
 
         print("\n✓ No changes made (dry run)")
         return
@@ -1124,8 +1124,8 @@ Examples:
         if do_github_release:
             print("\n=== Creating GitHub release ===")
             # Ensure the jar exists in target/ before creating the GitHub release.
-            if not (project_root / 'target' / 'minicli.jar').exists():
-                print("⚠ target/minicli.jar not found, build artifacts may be missing")
+            if not (project_root / 'target' / 'femtocli.jar').exists():
+                print("⚠ target/femtocli.jar not found, build artifacts may be missing")
             bumper.create_github_release(new_version)
 
         # Cleanup backups after successful release
@@ -1157,20 +1157,20 @@ Examples:
     print(f"  ✓ GitHub release created" if do_github_release else "  ⊘ GitHub release skipped")
 
     print(f"\nArtifacts:")
-    print(f"  • target/minicli.jar")
-    print(f"  • target/minicli-{new_version}.jar")
-    print(f"  • target/minicli-{new_version}-sources.jar")
-    print(f"  • target/minicli-{new_version}-javadoc.jar")
+    print(f"  • target/femtocli.jar")
+    print(f"  • target/femtocli-{new_version}.jar")
+    print(f"  • target/femtocli-{new_version}-sources.jar")
+    print(f"  • target/femtocli-{new_version}-javadoc.jar")
     if do_minimal:
-        print(f"  • target/minicli-minimal.jar")
+        print(f"  • target/femtocli-minimal.jar")
 
     if do_github_release:
         print(f"\n📦 GitHub Release:")
-        print(f"  https://github.com/parttimenerd/minicli/releases/tag/v{new_version}")
+        print(f"  https://github.com/parttimenerd/femtocli/releases/tag/v{new_version}")
 
     if do_deploy:
         print(f"\n📦 Maven Central:")
-        print(f"  https://central.sonatype.com/artifact/me.bechberger.util/minicli/{new_version}")
+        print(f"  https://central.sonatype.com/artifact/me.bechberger.util/femtocli/{new_version}")
 
 if __name__ == "__main__":
     main()
