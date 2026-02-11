@@ -57,6 +57,22 @@ final class CommandModel {
         }
     }
 
+    private static void registerOptionMeta(MiniCli.OptionMeta meta,
+                                          Map<String, MiniCli.OptionMeta> optionsByName,
+                                          Map<Field, MiniCli.OptionMeta> optionByField,
+                                          List<MiniCli.OptionMeta> options,
+                                          Map<String, Map<Field, List<String>>> namesByBareAndField) {
+        registerOptionMeta(meta, optionsByName, optionByField, options);
+        for (String name : meta.opt.names()) {
+            String bare = bareOptionName(name);
+            if (bare.isBlank()) continue;
+            namesByBareAndField
+                    .computeIfAbsent(bare, k -> new LinkedHashMap<>())
+                    .computeIfAbsent(meta.field, k -> new ArrayList<>())
+                    .add(name);
+        }
+    }
+
     private static boolean matchesIgnoreRule(String rule, Field field, Option opt) {
         if (rule == null || rule.isBlank()) return false;
         if (rule.startsWith("field:")) {
@@ -111,18 +127,63 @@ final class CommandModel {
         }
     }
 
+    private static void addDeclaredOptions(Object holder,
+                                          Class<?> declaredIn,
+                                          IgnoreOptions ignore,
+                                          Map<String, MiniCli.OptionMeta> optionsByName,
+                                          Map<Field, MiniCli.OptionMeta> optionByField,
+                                          List<MiniCli.OptionMeta> options,
+                                          Map<String, Map<Field, List<String>>> namesByBareAndField) {
+        for (Field field : declaredIn.getDeclaredFields()) {
+            field.setAccessible(true);
+            Option opt = field.getAnnotation(Option.class);
+            if (opt == null) continue;
+            if (Modifier.isFinal(field.getModifiers())) {
+                throw new FieldIsFinalException("@Option field must not be final: " + field);
+            }
+            if (!shouldIncludeOption(ignore, field, opt)) {
+                continue;
+            }
+            registerOptionMeta(new MiniCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options, namesByBareAndField);
+        }
+    }
+
     private static void collectOptionsFrom(Object holder,
                                           Map<String, MiniCli.OptionMeta> optionsByName,
                                           Map<Field, MiniCli.OptionMeta> optionByField,
-                                          List<MiniCli.OptionMeta> options) {
+                                          List<MiniCli.OptionMeta> options,
+                                          Map<String, Map<Field, List<String>>> namesByBareAndField) {
         IgnoreOptions ignore = holder.getClass().getAnnotation(IgnoreOptions.class);
 
         // inherited first (older classes first), then declared: declared overrides inherited
         Class<?> type = holder.getClass();
         for (Class<?> current = type.getSuperclass(); current != null && current != Object.class; current = current.getSuperclass()) {
-            addDeclaredOptions(holder, current, ignore, optionsByName, optionByField, options);
+            addDeclaredOptions(holder, current, ignore, optionsByName, optionByField, options, namesByBareAndField);
         }
-        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options);
+        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options, namesByBareAndField);
+    }
+
+    private static String bareOptionName(String optionName) {
+        if (optionName == null) return "";
+        if (optionName.startsWith("--")) return optionName.substring(2);
+        if (optionName.startsWith("-") && optionName.length() > 1) return optionName.substring(1);
+        return optionName;
+    }
+
+
+    private static void validateNoAmbiguousBareOptionNames(Map<String, Map<Field, List<String>>> namesByBareAndField) {
+        for (var e : namesByBareAndField.entrySet()) {
+            String bare = e.getKey();
+            Map<Field, List<String>> byField = e.getValue();
+            if (byField.size() > 1) {
+                List<String> names = new ArrayList<>();
+                for (List<String> ns : byField.values()) {
+                    names.addAll(ns);
+                }
+                throw new IllegalArgumentException(
+                        "Ambiguous option name '" + bare + "' (use distinct names): " + String.join(", ", names));
+            }
+        }
     }
 
     static CommandModel of(Object cmd) throws Exception {
@@ -133,15 +194,19 @@ final class CommandModel {
         Map<String, MiniCli.OptionMeta> optionsByName = new LinkedHashMap<>();
         Map<Field, MiniCli.OptionMeta> optionByField = new LinkedHashMap<>();
         List<MiniCli.OptionMeta> options = new ArrayList<>();
+        Map<String, Map<Field, List<String>>> namesByBareAndField = new LinkedHashMap<>();
 
         // Collect mixin options first, then command options (so command overrides same-name options)
         for (Field field : MiniCli.allFields(cmd.getClass())) {
             field.setAccessible(true);
             if (field.getAnnotation(Mixin.class) != null && field.get(cmd) instanceof Object mixin) {
-                collectOptionsFrom(mixin, optionsByName, optionByField, options);
+                collectOptionsFrom(mixin, optionsByName, optionByField, options, namesByBareAndField);
             }
         }
-        collectOptionsFrom(cmd, optionsByName, optionByField, options);
+        collectOptionsFrom(cmd, optionsByName, optionByField, options, namesByBareAndField);
+
+        // Fail early if agent-mode bare option normalization would be ambiguous.
+        validateNoAmbiguousBareOptionNames(namesByBareAndField);
 
         List<MiniCli.ParamInfo> params = new ArrayList<>();
         for (Field f : MiniCli.allFields(cmd.getClass())) {

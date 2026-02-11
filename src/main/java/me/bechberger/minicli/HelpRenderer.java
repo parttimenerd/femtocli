@@ -29,6 +29,10 @@ final class HelpRenderer {
     }
 
     static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out) {
+        render(cmd, commandPath, commandConfig, out, false);
+    }
+
+    static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
         Command annotation = cmd.getClass().getAnnotation(Command.class);
         boolean hasSubcommandClasses = annotation != null && annotation.subcommands().length > 0;
         boolean hasSubcommandMethods = hasSubcommandMethods(cmd.getClass());
@@ -46,18 +50,18 @@ final class HelpRenderer {
         printLines(out, annotation == null ? null : annotation.header());
 
         if (!printLines(out, annotation == null ? null : annotation.customSynopsis())) {
-            renderSynopsis(commandPath, showStandardHelpOptions, hasSubcommands, model.options, model.parameters, out);
+            renderSynopsis(commandPath, showStandardHelpOptions, hasSubcommands, model.options, model.parameters, out, agentMode);
         }
 
         if (commandConfig.effectiveEmptyLineAfterUsage(annotation)) out.println();
 
-        if (annotation != null && annotation.description().length > 0) {
+        if (!agentMode && annotation != null && annotation.description().length > 0) {
             out.println(annotation.description()[0]);
         }
 
         if (commandConfig.effectiveEmptyLineAfterDescription(annotation)) out.println();
 
-        renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out);
+        renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out, agentMode);
         renderSubcommands(cmd.getClass(), hasSubcommandClasses, hasSubcommandMethods, out);
         renderFooter(annotation, out);
     }
@@ -69,9 +73,42 @@ final class HelpRenderer {
         return true;
     }
 
+    private static String stripLeadingDashes(String name) {
+        if (name == null) return "";
+        if (name.startsWith("--")) return name.substring(2);
+        if (name.startsWith("-")) return name.substring(1);
+        return name;
+    }
+
     private static void renderSynopsis(String displayName, boolean showStandardHelpOptions,
                                        boolean hasSubcommands,
-                                       List<MiniCli.OptionMeta> options, List<MiniCli.ParamInfo> parameters, PrintStream out) {
+                                       List<MiniCli.OptionMeta> options, List<MiniCli.ParamInfo> parameters, PrintStream out,
+                                       boolean agentMode) {
+        if (agentMode) {
+            List<String> parts = new ArrayList<>();
+            parts.add(displayName);
+            if (showStandardHelpOptions) parts.add("[hV]");
+
+            for (MiniCli.OptionMeta opt : options) {
+                String optName = stripLeadingDashes(last(opt.opt.names()));
+                boolean isBoolean = MiniCli.isBooleanType(opt.field.getType());
+                if (!isBoolean) {
+                    String paramLabel = getOptionParamLabel(opt);
+                    String token = optName + "=" + paramLabel;
+                    parts.add(opt.opt.required() ? token : "[" + token + "]");
+                } else if (!opt.opt.required()) {
+                    parts.add("[" + optName + "]");
+                }
+            }
+
+            if (hasSubcommands) parts.add("[COMMAND]");
+            for (MiniCli.ParamInfo param : parameters) parts.add(getLabel(param));
+
+            out.println("Usage: " + String.join(",", parts));
+            return;
+        }
+
+        // non-agent mode (classic)
         StringBuilder synopsis = new StringBuilder("Usage: ").append(displayName);
         if (showStandardHelpOptions) synopsis.append(" [-hV]");
 
@@ -127,24 +164,29 @@ final class HelpRenderer {
                                                    boolean showStandardHelpOptions,
                                                    CommandConfig commandConfig,
                                                    Command annotation,
-                                                   PrintStream out) {
+                                                   PrintStream out,
+                                                   boolean agentMode) {
         List<HelpEntry> entries = new ArrayList<>(getHelpEntries(parameters));
 
         List<HelpEntry> optionEntries = new ArrayList<>();
         if (showStandardHelpOptions) {
-            optionEntries.add(new HelpEntry("-h, --help", "Show this help message and exit.", true));
-            optionEntries.add(new HelpEntry("-V, --version", "Print version information and exit.", true));
+            optionEntries.add(new HelpEntry(agentMode ? "h, help" : "-h, --help", "Show this help message and exit.", true));
+            optionEntries.add(new HelpEntry(agentMode ? "V, version" : "-V, --version", "Print version information and exit.", true));
         }
 
         for (MiniCli.OptionMeta opt : options) {
             if (opt.opt.hidden()) continue;
 
-            String names = formatOptionNames(opt);
+            String names = formatOptionNames(opt, agentMode);
             String description = expandPlaceholders(opt.opt.description(), opt.opt.defaultValue(), opt.field.getType());
             description = maybeAppendDefaultValue(description, opt.opt, commandConfig, annotation);
             if (opt.opt.required()) description += " (required)";
 
             optionEntries.add(new HelpEntry(names, description, hasShortOption(opt.opt.names())));
+        }
+
+        if (agentMode && !optionEntries.isEmpty()) {
+            out.println("Options:");
         }
 
         optionEntries.sort(Comparator.comparing(e -> e.label.replaceFirst("^\\s*-+", "").toLowerCase()));
@@ -166,12 +208,18 @@ final class HelpRenderer {
         return entries;
     }
 
-    private static String formatOptionNames(MiniCli.OptionMeta opt) {
+    private static String formatOptionNames(MiniCli.OptionMeta opt, boolean agentMode) {
         StringBuilder sb = new StringBuilder();
         String[] names = opt.opt.names();
 
         String[] sortedNames = Arrays.copyOf(names, names.length);
         Arrays.sort(sortedNames, Comparator.comparingInt(String::length));
+
+        if (agentMode) {
+            for (int i = 0; i < sortedNames.length; i++) {
+                sortedNames[i] = stripLeadingDashes(sortedNames[i]);
+            }
+        }
 
         sb.append(String.join(", ", sortedNames));
 

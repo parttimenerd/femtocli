@@ -25,7 +25,7 @@ public class ToolTest {
         }
         System.setOut(originalOut);
         System.setErr(originalErr);
-        return outContent.toString() + errContent.toString();
+        return outContent + errContent.toString();
     }
 
     @Test

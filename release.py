@@ -584,8 +584,8 @@ Download `minicli.jar` from the assets below.
 
     # Size limits (in bytes) for guarding against accidental bloat.
     # Note: thresholds are in KiB (1024 bytes).
-    _NORMAL_JAR_MAX_BYTES = 49 * 1024
-    _MINIMAL_JAR_MAX_BYTES = 39 * 1024
+    _NORMAL_JAR_MAX_BYTES = 55 * 1024
+    _MINIMAL_JAR_MAX_BYTES = 45 * 1024
 
     def _enforce_jar_size_limits(self):
         """Fail fast if produced jars exceed expected size limits."""

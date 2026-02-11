@@ -76,7 +76,7 @@ public final class MiniCli {
      * and use the passed output and error streams for MiniCli output.
      */
     public static int run(Object root, PrintStream out, PrintStream err, String[] args) {
-        return execute(root, out, err, args, Map.of(), new CommandConfig());
+        return execute(root, out, err, args, Map.of(), new CommandConfig(), false);
     }
 
     public static RunResult runCaptured(Object root, String[] args) {
@@ -87,9 +87,53 @@ public final class MiniCli {
         return builder().run(root, args);
     }
 
+    /**
+     * Run the CLI with agent args (a single comma-separated string), using {@link System#out} and {@link System#err}.
+     */
+    public static int runAgent(Object root, String agentArgs) {
+        return runAgent(root, System.out, System.err, agentArgs);
+    }
+
+    /**
+     * Run the CLI with the given root command object and a single "agent args" string.
+     * <p>
+     * Agent args are a comma-separated list of tokens that will be translated into the normal {@code String[]} argv.
+     * Escapes: {@code \\} (backslash), {@code \,} (comma), {@code \=} (equals). Whitespace around tokens is trimmed.
+     * Empty tokens (from ",," or a trailing comma) are rejected; use {@code --opt=} to pass an empty value.
+     * <p>
+     * Agent mode also supports single-quoted tokens and bare {@code help}/{@code version} and bare option names
+     * (like {@code req=x}) when unambiguous.
+     */
+    public static int runAgent(Object root, PrintStream out, PrintStream err, String agentArgs) {
+        String[] argv = AgentArgs.toArgv(agentArgs);
+        return execute(root, out, err, argv, Map.of(), new CommandConfig(), true);
+    }
+
+    public static RunResult runAgentCaptured(Object root, String agentArgs) {
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+        ByteArrayOutputStream errStream = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(outStream);
+        PrintStream err = new PrintStream(errStream);
+        PrintStream oldOut = System.out;
+        PrintStream oldErr = System.err;
+        System.setOut(out);
+        System.setErr(err);
+        int exitCode = runAgent(root, out, err, agentArgs);
+        System.setOut(oldOut);
+        System.setErr(oldErr);
+        return new RunResult(outStream.toString(), errStream.toString(), exitCode);
+    }
+
     private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
                                Map<Class<?>, TypeConverter<?>> converters,
                                CommandConfig commandConfig) {
+        return execute(root, out, err, args, converters, commandConfig, false);
+    }
+
+    private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
+                               Map<Class<?>, TypeConverter<?>> converters,
+                               CommandConfig commandConfig,
+                               boolean agentMode) {
         UsageContext previous = USAGE_CONTEXT.get();
         try {
             var tokens = new ArrayDeque<>(Arrays.asList(args));
@@ -103,13 +147,18 @@ public final class MiniCli {
             while (!tokens.isEmpty()) {
                 String next = tokens.peekFirst();
 
+                // In agent mode, allow bare help/version tokens at any depth.
+                if (agentMode && ("help".equals(next) || "version".equals(next))) {
+                    next = "help".equals(next) ? "--help" : "--version";
+                }
+
                 if (isHelp(next)) {
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig));
+                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     usage(cmd, out);
                     return 0;
                 }
                 if (isVersion(next)) {
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig));
+                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     version(root, out);
                     return 0;
                 }
@@ -136,16 +185,20 @@ public final class MiniCli {
                     if (mc != null && !mc.name().isBlank()) {
                         commandPath.add(mc.name());
                     }
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig));
+                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     return invokeSubcommandMethod(cmd, method, tokens, converters);
                 }
                 break;
             }
 
-            USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig));
+            USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
 
             CommandModel model = CommandModel.of(cmd);
             injectSpec(model, out, err, List.copyOf(commandPath), commandConfig);
+
+            if (agentMode) {
+                normalizeBareOptionTokens(cmd, tokens, model);
+            }
 
             parseInto(cmd, tokens, converters);
             return invoke(cmd);
@@ -178,6 +231,128 @@ public final class MiniCli {
         }
     }
 
+    /**
+     * Allow "bare" option names without leading dashes (useful for agent-args or restricted environments).
+     * <p>
+     * Example: "req=x" is normalized to "--req=x" if "--req" is a known option for the current command.
+     * If multiple options match, we fail early with a helpful error.
+     */
+    private static void normalizeBareOptionTokens(Object cmdForErrors, Deque<String> tokens, CommandModel model) throws UsageEx {
+        if (tokens.isEmpty() || model == null) {
+            return;
+        }
+        // Copy to allow in-place update
+        List<String> normalized = new ArrayList<>(tokens.size());
+        for (String t : tokens) {
+            String nt = normalizeBareOptionToken(cmdForErrors, t, model);
+            normalized.add(nt);
+        }
+        tokens.clear();
+        tokens.addAll(normalized);
+    }
+
+    private static String normalizeBareOptionToken(Object cmdForErrors, String token, CommandModel model) throws UsageEx {
+        if (token == null || token.isEmpty()) {
+            return token;
+        }
+        if (token.startsWith("-")) {
+            return token;
+        }
+        // help/version as bare tokens (besides regular --help/-h and --version/-V)
+        if ("help".equals(token)) {
+            return "--help";
+        }
+        if ("version".equals(token)) {
+            return "--version";
+        }
+
+        // Support bare boolean flags without '=' in agent mode, if unambiguous and boolean.
+        // Example: "flag" is normalized to "--flag" if --flag is a known boolean option.
+        if (!token.contains("=")) {
+            List<String> candidates = new ArrayList<>();
+            for (var e : model.optionsByName.entrySet()) {
+                String optName = e.getKey();
+                MiniCli.OptionMeta meta = e.getValue();
+                if (!MiniCli.isBooleanType(meta.field.getType())) {
+                    continue;
+                }
+                if (optName.startsWith("--") && optName.substring(2).equals(token)) {
+                    candidates.add(optName);
+                }
+                if (optName.startsWith("-") && !optName.startsWith("--") && optName.substring(1).equals(token)) {
+                    candidates.add(optName);
+                }
+            }
+            if (candidates.size() == 1) {
+                return candidates.getFirst();
+            }
+            if (candidates.size() > 1) {
+                throw new UsageEx(cmdForErrors,
+                        "Ambiguous bare option '" + token + "' (use full name): " + String.join(", ", candidates));
+            }
+            return token;
+        }
+
+        // Only treat tokens containing '=' as potential bare options to avoid interfering with positionals/subcommands.
+        int eq = token.indexOf('=');
+        if (eq < 0) {
+            return token;
+        }
+        String bareName = token.substring(0, eq);
+        if (bareName.isBlank()) {
+            return token;
+        }
+
+        List<String> candidates = new ArrayList<>();
+        MiniCli.OptionMeta firstMeta = null;
+        for (var e : model.optionsByName.entrySet()) {
+            String optName = e.getKey();
+            if (!(optName.startsWith("--") || (optName.startsWith("-") && !optName.startsWith("--")))) {
+                continue;
+            }
+            String stripped = optName.startsWith("--") ? optName.substring(2) : optName.substring(1);
+            if (!stripped.equals(bareName)) {
+                continue;
+            }
+            MiniCli.OptionMeta meta = e.getValue();
+            if (firstMeta == null) {
+                firstMeta = meta;
+                candidates.add(optName);
+            } else {
+                // If this candidate points to the same underlying option field, accept it as an alias.
+                if (meta.field.equals(firstMeta.field)) {
+                    candidates.add(optName);
+                } else {
+                    candidates.add(optName);
+                }
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return token;
+        }
+        // If multiple candidates exist but they all map to the same field, pick the long form if present.
+        if (candidates.size() > 1) {
+            // Check whether there are multiple distinct target fields
+            Set<Field> fields = new HashSet<>();
+            for (String c : candidates) {
+                fields.add(model.optionsByName.get(c).field);
+            }
+            if (fields.size() == 1) {
+                for (String c : candidates) {
+                    if (c.startsWith("--")) {
+                        return c + token.substring(eq);
+                    }
+                }
+                return candidates.getFirst() + token.substring(eq);
+            }
+
+            throw new UsageEx(cmdForErrors,
+                    "Ambiguous bare option '" + bareName + "' (use full name): " + String.join(", ", candidates));
+        }
+        return candidates.getFirst() + token.substring(eq);
+    }
+
     private static String commandName(Object cmd) {
         Command c = cmd.getClass().getAnnotation(Command.class);
         return c != null && !c.name().isBlank()
@@ -190,7 +365,7 @@ public final class MiniCli {
     }
 
     private static boolean looksLikeExplicitBooleanValue(String s) {
-        return s != null && ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s));
+        return ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s));
     }
 
     private static boolean isHelp(String t) { return "--help".equals(t) || "-h".equals(t); }
@@ -203,14 +378,18 @@ public final class MiniCli {
         UsageContext ctx = USAGE_CONTEXT.get();
         if (ctx != null) {
             // Always show the full command path (root + subcommands) in the usage line.
-            usage(cmd, ctx.commandPath, ctx.commandConfig, out);
+            usage(cmd, ctx.commandPath, ctx.commandConfig, out, ctx.agentMode);
             return;
         }
-        usage(cmd, List.of(commandName(cmd)), new CommandConfig(), out);
+        usage(cmd, List.of(commandName(cmd)), new CommandConfig(), out, false);
     }
 
     public static void usage(Object cmd, List<String> commandPath, CommandConfig commandConfig, PrintStream out) {
-        HelpRenderer.render(cmd, String.join(" ", commandPath), commandConfig, out);
+        usage(cmd, commandPath, commandConfig, out, false);
+    }
+
+    static void usage(Object cmd, List<String> commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
+        HelpRenderer.render(cmd, String.join(agentMode ? "," : " ", commandPath), commandConfig, out, agentMode);
     }
 
     public static void version(Object root, PrintStream out) {
@@ -335,9 +514,10 @@ public final class MiniCli {
     }
 
     private static void runVerifier(Object cmdForErrors, Object value,
-                                     Class<? extends Verifier> verifierClass,
-                                     String verifierMethod) throws Exception {
+                                    @SuppressWarnings("rawtypes") Class<? extends Verifier> verifierClass,
+                                    String verifierMethod) throws Exception {
         if (verifierClass != null && verifierClass != Verifier.NullVerifier.class) {
+            //noinspection unchecked
             verifierClass.getDeclaredConstructor().newInstance().verify(value);
         }
         if (!verifierMethod.isBlank()) {
@@ -756,10 +936,12 @@ public final class MiniCli {
     private static final class UsageContext {
         final List<String> commandPath;
         final CommandConfig commandConfig;
+        final boolean agentMode;
 
-        UsageContext(List<String> commandPath, CommandConfig commandConfig) {
+        UsageContext(List<String> commandPath, CommandConfig commandConfig, boolean agentMode) {
             this.commandPath = commandPath;
             this.commandConfig = commandConfig;
+            this.agentMode = agentMode;
         }
     }
 
