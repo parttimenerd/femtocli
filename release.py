@@ -36,6 +36,9 @@ class VersionBumper:
         self.backup_dir = project_root / ".release-backup"
         self.backups_created = False
 
+        # examples module (kept in sync with root version)
+        self.examples_pom_xml = project_root / "examples" / "pom.xml"
+
     def get_current_version(self) -> str:
         """Extract current version from pom.xml"""
         pom_content = self.pom_xml.read_text()
@@ -90,6 +93,30 @@ class VersionBumper:
         )
         self.readme.write_text(content)
         print(f"✓ Updated README.md: {old_version} -> {new_version}")
+
+    def update_examples_pom_xml(self, old_version: str, new_version: str):
+        """Update version in examples/pom.xml (module version + dependency version)."""
+        if not self.examples_pom_xml.exists():
+            print(f"⚠ examples/pom.xml not found at {self.examples_pom_xml}, skipping examples update")
+            return
+
+        content = self.examples_pom_xml.read_text()
+
+        # 1) Replace the first <version>...</version> (the examples project version)
+        content = content.replace(
+            f'<version>{old_version}</version>',
+            f'<version>{new_version}</version>',
+            1
+        )
+
+        # 2) Replace any remaining occurrences (dependency versions)
+        content = content.replace(
+            f'<version>{old_version}</version>',
+            f'<version>{new_version}</version>'
+        )
+
+        self.examples_pom_xml.write_text(content)
+        print(f"✓ Updated examples/pom.xml: {old_version} -> {new_version}")
 
     def show_version_diff(self, old_version: str, new_version: str):
         """Show what would change in version files"""
@@ -324,14 +351,15 @@ Download `minicli.jar` from the assets below.
         self.backup_dir.mkdir(exist_ok=True)
 
         files_to_backup = [
-            self.pom_xml,
-            self.readme,
-            self.changelog
+            (self.pom_xml, "pom.xml"),
+            (self.readme, "README.md"),
+            (self.changelog, "CHANGELOG.md"),
+            (self.examples_pom_xml, "examples-pom.xml"),
         ]
 
-        for file in files_to_backup:
+        for file, backup_name in files_to_backup:
             if file.exists():
-                backup_file = self.backup_dir / file.name
+                backup_file = self.backup_dir / backup_name
                 shutil.copy2(file, backup_file)
 
         self.backups_created = True
@@ -349,13 +377,16 @@ Download `minicli.jar` from the assets below.
         files_to_restore = [
             (self.backup_dir / "pom.xml", self.pom_xml),
             (self.backup_dir / "README.md", self.readme),
-            (self.backup_dir / "CHANGELOG.md", self.changelog)
+            (self.backup_dir / "CHANGELOG.md", self.changelog),
+            (self.backup_dir / "examples-pom.xml", self.examples_pom_xml),
         ]
 
         for backup_file, original_file in files_to_restore:
             if backup_file.exists():
+                # Ensure parent exists for nested paths like examples/pom.xml
+                original_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(backup_file, original_file)
-                print(f"  ✓ Restored {original_file.name}")
+                print(f"  ✓ Restored {original_file}")
 
         print("✓ All files restored from backup")
 
@@ -502,7 +533,7 @@ Download `minicli.jar` from the assets below.
     def git_commit(self, version: str):
         """Commit version changes"""
         self.run_command(
-            ['git', 'add', 'pom.xml', 'README.md', 'CHANGELOG.md'],
+            ['git', 'add', 'pom.xml', 'README.md', 'CHANGELOG.md', 'examples/pom.xml'],
             "Staging files"
         )
         self.run_command(
@@ -801,6 +832,7 @@ Examples:
         print("\n=== Updating version files ===")
         bumper.update_pom_xml(current_version, new_version)
         bumper.update_readme(current_version, new_version)
+        bumper.update_examples_pom_xml(current_version, new_version)
         bumper.update_changelog(new_version)
 
         # Run tests
