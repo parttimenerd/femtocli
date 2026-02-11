@@ -8,8 +8,8 @@ import java.util.List;
  */
 public final class Spec {
     private final Object command;
-    private final PrintStream out;
-    private final PrintStream err;
+    public final PrintStream out;
+    public final PrintStream err;
     private final List<String> commandPath;
     private final CommandConfig commandConfig;
 
