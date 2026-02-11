@@ -6,7 +6,7 @@
 
     <groupId>me.bechberger.util</groupId>
     <artifactId>femtocli</artifactId>
-    <version>0.1.13</version>
+    <version>0.2.0</version>
 
     <name>femtocli</name>
     <url>https://github.com/parttimenerd/femtocli</url>
