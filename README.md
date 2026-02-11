@@ -97,7 +97,7 @@ Add the library as a dependency in your project (< 55KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.12</version>
+  <version>0.1.13</version>
 </dependency>
 ```
 
@@ -107,7 +107,7 @@ And for the minimal version without debug metadata (< 45KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli-minimal</artifactId>
-  <version>0.1.12</version>
+  <version>0.1.13</version>
 </dependency>
 ```
 
