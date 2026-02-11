@@ -73,7 +73,7 @@ final class HelpRenderer {
         return true;
     }
 
-    private static String stripLeadingDashes(String name) {
+    static String stripLeadingDashes(String name) {
         if (name == null) return "";
         if (name.startsWith("--")) return name.substring(2);
         if (name.startsWith("-")) return name.substring(1);

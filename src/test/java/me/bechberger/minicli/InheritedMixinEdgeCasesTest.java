@@ -1,6 +1,5 @@
 package me.bechberger.minicli;
 
-import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Mixin;
 import me.bechberger.minicli.annotations.Option;
 import org.junit.jupiter.api.Test;

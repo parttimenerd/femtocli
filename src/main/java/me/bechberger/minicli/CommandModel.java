@@ -52,27 +52,22 @@ final class CommandModel {
     private static void registerOptionMeta(MiniCli.OptionMeta meta,
                                           Map<String, MiniCli.OptionMeta> optionsByName,
                                           Map<Field, MiniCli.OptionMeta> optionByField,
-                                          List<MiniCli.OptionMeta> options) {
-        options.add(meta);
-        optionByField.put(meta.field, meta);
-        for (String name : meta.opt.names()) {
-            optionsByName.put(name, meta);
-        }
-    }
-
-    private static void registerOptionMeta(MiniCli.OptionMeta meta,
-                                          Map<String, MiniCli.OptionMeta> optionsByName,
-                                          Map<Field, MiniCli.OptionMeta> optionByField,
                                           List<MiniCli.OptionMeta> options,
                                           Map<String, Map<Field, List<String>>> namesByBareAndField) {
-        registerOptionMeta(meta, optionsByName, optionByField, options);
+        options.add(meta);
+        optionByField.put(meta.field, meta);
+
         for (String name : meta.opt.names()) {
-            String bare = bareOptionName(name);
-            if (bare.isBlank()) continue;
-            namesByBareAndField
-                    .computeIfAbsent(bare, k -> new LinkedHashMap<>())
-                    .computeIfAbsent(meta.field, k -> new ArrayList<>())
-                    .add(name);
+            optionsByName.put(name, meta);
+
+            if (namesByBareAndField != null) {
+                String bare = HelpRenderer.stripLeadingDashes(name);
+                if (bare.isBlank()) continue;
+                namesByBareAndField
+                        .computeIfAbsent(bare, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(meta.field, k -> new ArrayList<>())
+                        .add(name);
+            }
         }
     }
 
@@ -110,25 +105,6 @@ final class CommandModel {
         return !matchesAnyRule(ignore.options(), field, opt);
     }
 
-    private static void addDeclaredOptions(Object holder,
-                                          Class<?> declaredIn,
-                                          IgnoreOptions ignore,
-                                          Map<String, MiniCli.OptionMeta> optionsByName,
-                                          Map<Field, MiniCli.OptionMeta> optionByField,
-                                          List<MiniCli.OptionMeta> options) {
-        for (Field field : declaredIn.getDeclaredFields()) {
-            field.setAccessible(true);
-            Option opt = field.getAnnotation(Option.class);
-            if (opt == null) continue;
-            if (Modifier.isFinal(field.getModifiers())) {
-                throw new FieldIsFinalException("@Option field must not be final: " + field);
-            }
-            if (!shouldIncludeOption(ignore, field, opt)) {
-                continue;
-            }
-            registerOptionMeta(new MiniCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options);
-        }
-    }
 
     private static void addDeclaredOptions(Object holder,
                                           Class<?> declaredIn,
@@ -164,13 +140,6 @@ final class CommandModel {
             addDeclaredOptions(holder, current, ignore, optionsByName, optionByField, options, namesByBareAndField);
         }
         addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options, namesByBareAndField);
-    }
-
-    private static String bareOptionName(String optionName) {
-        if (optionName == null) return "";
-        if (optionName.startsWith("--")) return optionName.substring(2);
-        if (optionName.startsWith("-") && optionName.length() > 1) return optionName.substring(1);
-        return optionName;
     }
 
 

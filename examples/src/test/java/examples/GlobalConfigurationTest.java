@@ -1,6 +1,5 @@
 package examples;
 
-import me.bechberger.minicli.MiniCli;
 import me.bechberger.minicli.examples.GlobalConfiguration;
 import org.junit.jupiter.api.Test;
 

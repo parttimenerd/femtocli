@@ -148,8 +148,8 @@ public final class MiniCli {
                 String next = tokens.peekFirst();
 
                 // In agent mode, allow bare help/version tokens at any depth.
-                if (agentMode && ("help".equals(next) || "version".equals(next))) {
-                    next = "help".equals(next) ? "--help" : "--version";
+                if (agentMode) {
+                    next = normalizeBareHelpOrVersionToken(next);
                 }
 
                 if (isHelp(next)) {
@@ -251,6 +251,12 @@ public final class MiniCli {
         tokens.addAll(normalized);
     }
 
+    private static String normalizeBareHelpOrVersionToken(String token) {
+        if ("help".equals(token)) return "--help";
+        if ("version".equals(token)) return "--version";
+        return token;
+    }
+
     private static String normalizeBareOptionToken(Object cmdForErrors, String token, CommandModel model) throws UsageEx {
         if (token == null || token.isEmpty()) {
             return token;
@@ -259,30 +265,15 @@ public final class MiniCli {
             return token;
         }
         // help/version as bare tokens (besides regular --help/-h and --version/-V)
-        if ("help".equals(token)) {
-            return "--help";
-        }
-        if ("version".equals(token)) {
-            return "--version";
+        token = normalizeBareHelpOrVersionToken(token);
+        if ("--help".equals(token) || "--version".equals(token)) {
+            return token;
         }
 
         // Support bare boolean flags without '=' in agent mode, if unambiguous and boolean.
         // Example: "flag" is normalized to "--flag" if --flag is a known boolean option.
         if (!token.contains("=")) {
-            List<String> candidates = new ArrayList<>();
-            for (var e : model.optionsByName.entrySet()) {
-                String optName = e.getKey();
-                MiniCli.OptionMeta meta = e.getValue();
-                if (!MiniCli.isBooleanType(meta.field.getType())) {
-                    continue;
-                }
-                if (optName.startsWith("--") && optName.substring(2).equals(token)) {
-                    candidates.add(optName);
-                }
-                if (optName.startsWith("-") && !optName.startsWith("--") && optName.substring(1).equals(token)) {
-                    candidates.add(optName);
-                }
-            }
+            List<String> candidates = getCandidates(token, model);
             if (candidates.size() == 1) {
                 return candidates.getFirst();
             }
@@ -303,30 +294,7 @@ public final class MiniCli {
             return token;
         }
 
-        List<String> candidates = new ArrayList<>();
-        MiniCli.OptionMeta firstMeta = null;
-        for (var e : model.optionsByName.entrySet()) {
-            String optName = e.getKey();
-            if (!(optName.startsWith("--") || (optName.startsWith("-") && !optName.startsWith("--")))) {
-                continue;
-            }
-            String stripped = optName.startsWith("--") ? optName.substring(2) : optName.substring(1);
-            if (!stripped.equals(bareName)) {
-                continue;
-            }
-            MiniCli.OptionMeta meta = e.getValue();
-            if (firstMeta == null) {
-                firstMeta = meta;
-                candidates.add(optName);
-            } else {
-                // If this candidate points to the same underlying option field, accept it as an alias.
-                if (meta.field.equals(firstMeta.field)) {
-                    candidates.add(optName);
-                } else {
-                    candidates.add(optName);
-                }
-            }
-        }
+        List<String> candidates = getCandidates(model, bareName);
 
         if (candidates.isEmpty()) {
             return token;
@@ -351,6 +319,37 @@ public final class MiniCli {
                     "Ambiguous bare option '" + bareName + "' (use full name): " + String.join(", ", candidates));
         }
         return candidates.getFirst() + token.substring(eq);
+    }
+
+    private static List<String> getCandidates(String token, CommandModel model) {
+        // Boolean-only candidates (used for bare boolean flag normalization)
+        return getCandidates(model, token, true);
+    }
+
+    private static List<String> getCandidates(CommandModel model, String bareName) {
+        // Any option candidates (used for bare-name-with-"=" normalization)
+        return getCandidates(model, bareName, false);
+    }
+
+    private static List<String> getCandidates(CommandModel model, String bareName, boolean requireBoolean) {
+        List<String> candidates = new ArrayList<>();
+        for (var e : model.optionsByName.entrySet()) {
+            String optName = e.getKey();
+            if (!(optName.startsWith("--") || (optName.startsWith("-") && !optName.startsWith("--")))) {
+                continue;
+            }
+
+            OptionMeta meta = e.getValue();
+            if (requireBoolean && !MiniCli.isBooleanType(meta.field.getType())) {
+                continue;
+            }
+
+            String stripped = optName.startsWith("--") ? optName.substring(2) : optName.substring(1);
+            if (stripped.equals(bareName)) {
+                candidates.add(optName);
+            }
+        }
+        return candidates;
     }
 
     private static String commandName(Object cmd) {
@@ -1075,20 +1074,15 @@ public final class MiniCli {
             owner = Objects.requireNonNull(defaultClass, "No default class available for method: " + spec);
         } else {
             // Try resolving relative to the command class first, to support nested helper classes.
-            // Example: verifierMethod="Helpers#checkPort" inside CustomTypeVerifiers resolves to
-            //          "...CustomTypeVerifiers$Helpers#checkPort".
-            ClassNotFoundException last = null;
+            owner = null;
             if (defaultClass != null) {
                 // 1) Nested class of the default class OR any of its enclosing classes
-                //    (covers cases where the command itself is a nested class but the helper is defined
-                //     on the outer class).
-                owner = null;
                 for (Class<?> c = defaultClass; c != null; c = c.getEnclosingClass()) {
                     try {
                         owner = Class.forName(c.getName() + "$" + classPart);
                         break;
-                    } catch (ClassNotFoundException e) {
-                        last = e;
+                    } catch (ClassNotFoundException ignored) {
+                        // try next
                     }
                 }
                 if (owner == null) {
@@ -1098,14 +1092,11 @@ public final class MiniCli {
                     if (!pkg.isBlank()) {
                         try {
                             owner = Class.forName(pkg + "." + classPart);
-                        } catch (ClassNotFoundException e) {
-                            last = e;
+                        } catch (ClassNotFoundException ignored) {
+                            // fall through to as-is resolution
                         }
                     }
                 }
-                // keep last around for potential debugging; we'll try global resolution next
-            } else {
-                owner = null;
             }
 
             // 3) As-is (fully qualified class name)

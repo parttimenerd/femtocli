@@ -1,12 +1,9 @@
 package me.bechberger.minicli.examples;
 
 import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.Spec;
 import me.bechberger.minicli.VerifierException;
 import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Option;
-
-import java.time.Duration;
 
 class Helpers {
     static void checkPort(int p) {
