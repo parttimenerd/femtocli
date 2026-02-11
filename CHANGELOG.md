@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## [0.1.12] - 2026-02-11
+
+### Added
 - New unit tests: `BooleanOptionConverterTest` and `MixinConstructorAccessibilityTest` to cover converter-backed boolean parsing and mixin constructor accessibility.
 
 ### Fixed

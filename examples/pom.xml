@@ -6,7 +6,7 @@
 
     <groupId>me.bechberger.util</groupId>
     <artifactId>minicli-examples</artifactId>
-    <version>0.1.11</version>
+    <version>0.1.12</version>
 
     <name>minicli examples</name>
 
@@ -35,7 +35,7 @@
         <dependency>
             <groupId>me.bechberger.util</groupId>
             <artifactId>minicli</artifactId>
-            <version>0.1.11</version>
+            <version>0.1.12</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
