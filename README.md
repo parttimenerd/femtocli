@@ -43,6 +43,7 @@ Quick Start
 
 This is the smallest realistic setup: one top-level command with a subcommand and a required option.
 
+<!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/QuickStart.java" -->
 ```java
 package me.bechberger.minicli.examples;
 
@@ -79,14 +80,16 @@ public class QuickStart implements Runnable {
     }
 }
 ```
-
+<!-- @minicli:end -->
 
 Try it:
 
-```text
+<!-- @minicli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
+```sh
+> ./examples/run.sh QuickStart greet --name=World --count=1
 Hello, World!
 ```
-
+<!-- @minicli:end -->
 
 Maven dependency
 ----------------
@@ -861,6 +864,9 @@ Options:
 
 ### Custom type converters [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomTypeConverters.java)
 
+Minicli supports parsing the primitive types and their boxing wrappers, as well as Duration and Path, 
+but if you want more, you can bring your own converters:
+
 Register type converters globally, or declare a per-option converter (class or method).
 
 <!-- @minicli:include-java path="examples/src/main/java/me/bechberger/minicli/examples/CustomTypeConverters.java" -->
@@ -989,7 +995,7 @@ Usage: enums [-hV] [--mode=<mode>]
 ```
 <!-- @minicli:end -->
 
-### Custom header + synopsis [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomHeaderAndSynopsis.java)
+### Custom header, footer and synopsis [(source)](examples/src/main/java/me/bechberger/minicli/examples/CustomHeaderAndSynopsis.java)
 
 Customize the help screen with a header and a fully custom synopsis.
 
@@ -1134,12 +1140,9 @@ Validate values and produce user-friendly errors.
 package me.bechberger.minicli.examples;
 
 import me.bechberger.minicli.MiniCli;
-import me.bechberger.minicli.Spec;
 import me.bechberger.minicli.VerifierException;
 import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Option;
-
-import java.time.Duration;
 
 class Helpers {
     static void checkPort(int p) {

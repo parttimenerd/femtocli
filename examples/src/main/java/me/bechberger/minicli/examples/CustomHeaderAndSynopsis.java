@@ -5,7 +5,7 @@ import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Option;
 
 /**
- * A command with a custom header and synopsis.
+ * A command with a custom header, synopsis and footer.
  * The header is printed above the usage message, and the synopsis replaces the default usage line.
  */
 @Command(
