@@ -3,6 +3,7 @@ package me.bechberger.minicli.examples;
 import me.bechberger.minicli.MiniCli;
 import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Option;
+import me.bechberger.minicli.annotations.Parameters;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
@@ -18,21 +19,19 @@ import java.util.concurrent.Callable;
  *   <li>{@code version}</li>
  * </ul>
  */
-public class AgentCliExample {
+@Command(
+        name = "agent-cli",
+        description = "Demo CLI for agent args mode",
+        version = "1.0.0",
+        subcommands = {AgentCli.Start.class, AgentCli.Stop.class},
+        mixinStandardHelpOptions = true
+)
+public class AgentCli implements Runnable {
 
-    @Command(
-            name = "agent-cli",
-            description = "Demo CLI for agent args mode",
-            version = "1.0.0",
-            subcommands = {Start.class, Stop.class},
-            mixinStandardHelpOptions = true
-    )
-    public static class Root implements Runnable {
-        @Override
-        public void run() {
-            // default action
-            System.out.println("Try: start,interval=1ms or stop,output=file.jfr,verbose");
-        }
+    @Override
+    public void run() {
+        // default action
+        System.out.println("Try: start,interval=1ms or stop,output=file.jfr,verbose");
     }
 
     @Command(name = "start", description = "Start recording", mixinStandardHelpOptions = true)
@@ -50,6 +49,8 @@ public class AgentCliExample {
 
     @Command(name = "stop", description = "Stop recording", mixinStandardHelpOptions = true)
     public static class Stop implements Callable<Integer> {
+        @Parameters
+        String mode;
 
         @Option(names = "--output", required = true, description = "Output file")
         String output;
@@ -59,7 +60,7 @@ public class AgentCliExample {
 
         @Override
         public Integer call() {
-            System.out.println("stop: output=" + output + ", verbose=" + verbose);
+            System.out.println("stop: mode=" + mode + ", output=" + output + ", verbose=" + verbose);
             return 0;
         }
     }
@@ -68,8 +69,8 @@ public class AgentCliExample {
         // Demonstrate agent mode if a single agent-args string is passed,
         // otherwise fall back to normal argv parsing.
         if (args.length == 1) {
-            System.exit(MiniCli.runAgent(new Root(), args[0]));
+            System.exit(MiniCli.runAgent(new AgentCli(), args[0]));
         }
-        System.exit(MiniCli.run(new Root(), args));
+        System.exit(MiniCli.run(new AgentCli(), args));
     }
 }

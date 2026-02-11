@@ -547,8 +547,17 @@ public final class MiniCli {
 
         // If no explicit value is provided (no "=...")
         if (value == null) {
+            // Determine whether this boolean option should be treated as a simple flag (presence => true)
+            // or whether it requires an explicit value. If the option has a per-option converter (converter
+            // class or converterMethod) or a converter was registered for this type, we must require a value
+            // so that the converter receives the raw token (e.g. "on"/"off"). Only when no converter is
+            // present do we preserve the old "flag" behavior for booleans.
+            boolean hasPerOptionConverter = opt != null && (!opt.converterMethod().isBlank() || opt.converter() != TypeConverter.NullTypeConverter.class);
+            boolean hasRegisteredConverter = converters != null && converters.containsKey(type);
+            boolean treatBooleanAsFlag = isBoolean && !hasPerOptionConverter && !hasRegisteredConverter;
+
             // Boolean flags: presence means true, but allow an explicit boolean value as the next token.
-            if (isBoolean) {
+            if (treatBooleanAsFlag) {
                 if (!tokens.isEmpty() && looksLikeExplicitBooleanValue(tokens.peekFirst())) {
                     value = tokens.removeFirst();
                 } else {
@@ -1024,7 +1033,7 @@ public final class MiniCli {
         if (constants == null || constants.length == 0) {
             return "";
         }
-        StringJoiner joiner = new StringJoiner(",");
+        StringJoiner joiner = new StringJoiner(", ");
         for (Object c : constants) {
             joiner.add(String.valueOf(c));
         }
@@ -1061,9 +1070,49 @@ public final class MiniCli {
             methodPart = spec;
         }
 
-        Class<?> owner = (classPart == null || classPart.isBlank())
-                ? Objects.requireNonNull(defaultClass, "No default class available for method: " + spec)
-                : Class.forName(classPart);
+        Class<?> owner;
+        if (classPart == null || classPart.isBlank()) {
+            owner = Objects.requireNonNull(defaultClass, "No default class available for method: " + spec);
+        } else {
+            // Try resolving relative to the command class first, to support nested helper classes.
+            // Example: verifierMethod="Helpers#checkPort" inside CustomTypeVerifiers resolves to
+            //          "...CustomTypeVerifiers$Helpers#checkPort".
+            ClassNotFoundException last = null;
+            if (defaultClass != null) {
+                // 1) Nested class of the default class OR any of its enclosing classes
+                //    (covers cases where the command itself is a nested class but the helper is defined
+                //     on the outer class).
+                owner = null;
+                for (Class<?> c = defaultClass; c != null; c = c.getEnclosingClass()) {
+                    try {
+                        owner = Class.forName(c.getName() + "$" + classPart);
+                        break;
+                    } catch (ClassNotFoundException e) {
+                        last = e;
+                    }
+                }
+                if (owner == null) {
+                    // 2) Same package as the default class
+                    Package p = defaultClass.getPackage();
+                    String pkg = p != null ? p.getName() : "";
+                    if (!pkg.isBlank()) {
+                        try {
+                            owner = Class.forName(pkg + "." + classPart);
+                        } catch (ClassNotFoundException e) {
+                            last = e;
+                        }
+                    }
+                }
+                // keep last around for potential debugging; we'll try global resolution next
+            } else {
+                owner = null;
+            }
+
+            // 3) As-is (fully qualified class name)
+            if (owner == null) {
+                owner = Class.forName(classPart);
+            }
+        }
 
         for (Method m : owner.getDeclaredMethods()) {
             if (m.getName().equals(methodPart)) {

@@ -6,6 +6,9 @@ import me.bechberger.minicli.annotations.Option;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Demonstrates how to use multi-value options. The option value is split by a separator and stored in a list.
+ */
 public class MultiValueOptions implements Runnable {
     @Option(names = "-I", description = "Include dirs")
     List<Path> includeDirs; // -I a -I b

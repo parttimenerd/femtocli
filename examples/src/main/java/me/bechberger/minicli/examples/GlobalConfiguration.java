@@ -13,6 +13,6 @@ public class GlobalConfiguration implements Runnable {
                 .commandConfig(c -> {
                     c.version = "1.2.3";
                 })
-                .run(new QuickStart(), System.out, System.err, args);
+                .run(new GlobalConfiguration(), args);
     }
 }

@@ -4,7 +4,7 @@ import me.bechberger.minicli.MiniCli;
 import me.bechberger.minicli.annotations.Command;
 
 @Command(name = "myapp")
-public class SubcommandsMethods implements Runnable {
+public class SubcommandMethod implements Runnable {
     @Command(name = "status", description = "Show status")
     int status() {
         System.out.println("OK");
@@ -16,6 +16,6 @@ public class SubcommandsMethods implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new SubcommandsMethods(), args);
+        MiniCli.run(new SubcommandMethod(), args);
     }
 }

@@ -5,6 +5,10 @@ import me.bechberger.minicli.annotations.Parameters;
 
 import java.util.List;
 
+/**
+ * Shows how to use positional parameters.
+ * Positional parameters are defined by their index and are not prefixed by an option name.
+ */
 public class PositionalParameters implements Runnable {
     @Parameters(index = "0", paramLabel = "FILE", description = "Input file")
     String file;

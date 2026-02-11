@@ -1,11 +1,13 @@
 package me.bechberger.minicli.examples;
 
 import me.bechberger.minicli.MiniCli;
+import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Option;
 import me.bechberger.minicli.annotations.Parameters;
 
 import java.nio.file.Path;
 
+@Command(name = "help-labels")
 public class HelpLabelsAndDefaults implements Runnable {
     @Option(
             names = "--output",

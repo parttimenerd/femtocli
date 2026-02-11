@@ -5,6 +5,9 @@ import me.bechberger.minicli.annotations.Command;
 import me.bechberger.minicli.annotations.Mixin;
 import me.bechberger.minicli.annotations.Option;
 
+/**
+ * Shows how to use mixins to share options between subcommands. Run with "a -v" or "b -v" to see the effect.
+ */
 @Command(name = "mixins", subcommands = {MixinsAndSubcommands.A.class, MixinsAndSubcommands.B.class})
 public class MixinsAndSubcommands implements Runnable {
     /** Example how to use mixins to share options between commands */
@@ -19,6 +22,7 @@ public class MixinsAndSubcommands implements Runnable {
         Common common;
 
         public void run() {
+            System.out.println("Verbose: " + common.verbose);
         }
     }
 
@@ -28,6 +32,7 @@ public class MixinsAndSubcommands implements Runnable {
         Common common;
 
         public void run() {
+            System.out.println("Verbose: " + common.verbose);
         }
     }
 

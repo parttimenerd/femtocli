@@ -7,6 +7,7 @@ import me.bechberger.minicli.annotations.IgnoreOptions;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Constructor;
 import java.util.*;
 
 final class CommandModel {
@@ -40,7 +41,9 @@ final class CommandModel {
                     throw new FieldIsFinalException("@Mixin field must not be final: " + field);
                 }
                 field.setAccessible(true);
-                Object mixin = field.getType().getDeclaredConstructor().newInstance();
+                Constructor<?> ctor = field.getType().getDeclaredConstructor();
+                ctor.setAccessible(true);
+                Object mixin = ctor.newInstance();
                 field.set(cmd, mixin);
             }
         }

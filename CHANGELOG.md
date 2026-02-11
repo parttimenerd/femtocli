@@ -8,10 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New unit tests: `BooleanOptionConverterTest` and `MixinConstructorAccessibilityTest` to cover converter-backed boolean parsing and mixin constructor accessibility.
+
+### Fixed
+- Boolean options that declare a per-option converter (via `converter` or `converterMethod`) or that have a registered converter are now treated as value-taking options. This ensures values like `--turn=on` or `--turn on` are passed to the converter instead of being parsed as a flag.
+- Mixin initialization now makes the mixin constructor accessible before instantiation, avoiding `IllegalAccessException` for package-private/non-public mixin constructors used in tests and user code.
+- Fix discovery of converter and verifier methods
+
 ### Changed
 ### Deprecated
 ### Removed
-### Fixed
 ### Security
 
 ## [0.1.11] - 2026-02-11
