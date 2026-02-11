@@ -29,3 +29,10 @@ jobs:
 
       - name: Run tests
         run: mvn clean test
+
+      - name: Install minicli for examples
+        run: mvn -q install -DskipTests
+
+      - name: Run examples tests
+        working-directory: examples
+        run: mvn clean test

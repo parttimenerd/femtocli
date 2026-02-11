@@ -31,11 +31,11 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Always pin to the current released version of minicli -->
+        <!-- Use the current workspace build of minicli (same version as this examples module). -->
         <dependency>
             <groupId>me.bechberger.util</groupId>
             <artifactId>minicli</artifactId>
-            <version>0.1.12</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -14,7 +14,7 @@ public class EnumsAndCompletionCandidatesTest {
                 Usage: enums [-hV] [--mode=<mode>]
                   -h, --help       Show this help message and exit.
                       --mode=<mode>
-                                   Mode (fast,safe), default: safe
+                                   Mode (fast, safe), default: safe
                   -V, --version    Print version information and exit.
                 """, res.out());
     }

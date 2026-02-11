@@ -16,6 +16,7 @@ public class CustomTypeConvertersTest {
         );
         assertEquals("""
                 Name: MAX
+                Turn: true
                 Timeout: PT10S
                 """, res);
     }

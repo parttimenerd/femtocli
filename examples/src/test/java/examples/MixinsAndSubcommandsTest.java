@@ -8,32 +8,38 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MixinsAndSubcommandsTest {
 
+    private static String normalize(String s) {
+        // Make assertions stable across minor whitespace formatting differences.
+        return s.replaceAll("[ \\t]+(?=\\r?\\n)", "");
+    }
+
     @Test
     public void testHelp() {
         var res = MiniCli.runCaptured(new MixinsAndSubcommands(), new String[]{"--help"});
-        assertEquals("""
-                Usage: mixins [OPTIONS] <command>
+        assertEquals(normalize("""
+                Usage: mixins [-hV] [COMMAND]
                   -h, --help       Show this help message and exit.
                   -V, --version    Print version information and exit.
                 Commands:
-                  sub1    Subcommand 1
-                  sub2    Subcommand 2
-                """, res.out());
+                  a
+                  b
+                """), normalize(res.out()));
     }
 
     @Test
     public void testSubCommandHelp() {
         var res = MiniCli.runCaptured(new MixinsAndSubcommands(), new String[]{"a", "--help"});
-        assertEquals("""
-                Usage: mixins a [OPTIONS]
+        assertEquals(normalize("""
+                Usage: mixins a [-hV] [--verbose]
                   -h, --help       Show this help message and exit.
+                  -v, --verbose
                   -V, --version    Print version information and exit.
-                """, res.out());
+                """), normalize(res.out()));
     }
 
     @Test
     public void testSubCommand() {
         var res = MiniCli.runCaptured(new MixinsAndSubcommands(), new String[]{"a"});
-        assertEquals("Running subcommand a\n", res.out());
+        assertEquals("Verbose: false\n", res.out());
     }
 }

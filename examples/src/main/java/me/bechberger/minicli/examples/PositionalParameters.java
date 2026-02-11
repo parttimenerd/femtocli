@@ -23,6 +23,6 @@ public class PositionalParameters implements Runnable {
     }
 
     public static void main(String[] args) {
-        MiniCli.run(new MultiValueOptions(), args);
+        MiniCli.run(new PositionalParameters(), args);
     }
 }

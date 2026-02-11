@@ -90,6 +90,7 @@ final class HelpRenderer {
             if (showStandardHelpOptions) parts.add("[hV]");
 
             for (MiniCli.OptionMeta opt : options) {
+                if (opt.opt.hidden()) continue;
                 String optName = stripLeadingDashes(last(opt.opt.names()));
                 boolean isBoolean = MiniCli.isBooleanType(opt.field.getType());
                 if (!isBoolean) {
@@ -113,6 +114,7 @@ final class HelpRenderer {
         if (showStandardHelpOptions) synopsis.append(" [-hV]");
 
         for (MiniCli.OptionMeta opt : options) {
+            if (opt.opt.hidden()) continue;
             String optName = last(opt.opt.names());
             boolean isBoolean = MiniCli.isBooleanType(opt.field.getType());
 

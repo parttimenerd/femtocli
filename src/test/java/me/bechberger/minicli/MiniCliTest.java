@@ -1111,6 +1111,36 @@ class MiniCliTest {
         assertThat(help).contains("--debug");
     }
 
+    @Test
+    void hiddenOptionsAreOmittedFromUsageSynopsis() {
+        @me.bechberger.minicli.annotations.Command(
+                name = "hidden-usage",
+                description = "Test hidden options in usage",
+                mixinStandardHelpOptions = true
+        )
+        class HiddenUsageCmd implements Runnable {
+            @me.bechberger.minicli.annotations.Option(names = "--shown", description = "Shown")
+            String shown;
+
+            @me.bechberger.minicli.annotations.Option(names = "--secret", hidden = true, description = "Hidden")
+            String secret;
+
+            @Override
+            public void run() {
+            }
+        }
+
+        CliTest test = CliTest.of(new HiddenUsageCmd())
+                .args("--help")
+                .run()
+                .expectCode(0);
+
+        String help = test.stdout();
+        // --secret must not appear anywhere in the usage line.
+        assertThat(help).contains("Usage: hidden-usage [-hV] [--shown=<shown>]\n");
+        assertThat(help).doesNotContain("--secret");
+    }
+
     // ========== Combined stress test ==========
 
     @Test

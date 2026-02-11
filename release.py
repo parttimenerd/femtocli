@@ -94,6 +94,212 @@ class VersionBumper:
         self.readme.write_text(content)
         print(f"✓ Updated README.md: {old_version} -> {new_version}")
 
+    # -------------------------
+    # README directive rendering
+    # -------------------------
+
+    _DIRECTIVE_RE = re.compile(r"<!--\s*@minicli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->")
+    _END_MARKER_RE = re.compile(r"<!--\s*@minicli:end\s*-->")
+
+    def render_readme_directives(self, *, readme_path: Optional[Path] = None, check: bool = True) -> bool:
+        """Render README directives in-place.
+
+        A directive expands to a *block* of markdown delimited by:
+
+            <!-- @minicli:<kind> ... -->
+            ... generated content ...
+            <!-- @minicli:end -->
+
+        Only the content between the directive line and the end marker is replaced.
+
+        Directives:
+        - include-java: include the contents of a Java file
+          <!-- @minicli:include-java path="examples/src/main/java/.../QuickStart.java" -->
+          <!-- @minicli:end -->
+
+          Optional:
+          - region="name" to include only a region delimited by:
+              // region name
+              // endregion name
+
+        - run-java: run an example main class and embed its stdout/stderr
+
+          Class name:
+          - Use a fully-qualified class name:
+              <!-- @minicli:run-java class="me.bechberger.minicli.examples.QuickStart" args="--help" -->
+          - Or use a short name (auto-prefixed with "me.bechberger.minicli.examples."):
+              <!-- @minicli:run-java class="QuickStart" args="--help" -->
+
+          Args:
+          - As a single string (shell-split):
+              <!-- @minicli:run-java class="QuickStart" args="greet --name=World --count=1" -->
+          - Or as a JSON array of strings (no quoting ambiguity):
+              <!-- @minicli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
+
+          The rendered output uses a single `sh` code fence and starts with a
+          copy/pastable command line using `./examples/run.sh`.
+
+        Notes:
+        - Errors are embedded if check=False; if check=True, the renderer fails fast.
+
+        Returns True if the README changed.
+        """
+        target = readme_path or self.readme
+        if not target.exists():
+            raise FileNotFoundError(target)
+
+        original = target.read_text()
+
+        # Ensure the current workspace build of minicli is available to the examples module.
+        # The examples/pom.xml depends on ${project.version}, so installing here guarantees
+        # that README rendering uses the current sources (not a previously released version).
+        self.run_command(['mvn', '-q', 'install', '-DskipTests'], 'Installing minicli (for README rendering)', cwd=self.project_root)
+
+        # Always rebuild the examples project so README output stays in sync with sources.
+        # This prevents stale jar output if example mains / help text changes.
+        self.run_command(['mvn', '-q', 'package'], 'Packaging examples (for README rendering)', cwd=self.project_root / 'examples')
+
+        def parse_attrs(s: str) -> dict:
+            """Parse directive attributes.
+
+            Supported forms:
+            - key="value" (default)
+            - args=["a","b c","--flag"]  (JSON array of strings)
+
+            Notes:
+            - If both args="..." and args=[...] are present, the array form wins.
+            - This is intentionally small/safe and not a full HTML attribute parser.
+            """
+            attrs: dict = {}
+
+            # 1) key="value" pairs
+            for m in re.finditer(r'(\w+)\s*=\s*"((?:\\.|[^"])*)"', s):
+                k = m.group(1)
+                v = m.group(2)
+                v = v.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                attrs[k] = v
+
+            # 2) args=[...] JSON array (allows spaces without shell quoting rules)
+            m = re.search(r'\bargs\s*=\s*(\[[^\]]*\])', s)
+            if m:
+                import json
+                try:
+                    parsed = json.loads(m.group(1))
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"args must be valid JSON array: {e}")
+                if not isinstance(parsed, list) or not all(isinstance(x, str) for x in parsed):
+                    raise ValueError("args must be a JSON array of strings")
+                attrs['args'] = parsed
+
+            return attrs
+
+        def fence(lang: str, body: str) -> str:
+            body = body.replace('\r\n', '\n')
+            if not body.endswith('\n'):
+                body += '\n'
+            return f"```{lang}\n{body}```\n"
+
+        def include_java(attrs: dict) -> str:
+            rel = attrs.get('path')
+            if not rel:
+                raise ValueError("include-java directive requires path=\"...\"")
+            p = (self.project_root / rel).resolve()
+            if not p.exists():
+                raise FileNotFoundError(p)
+            content = p.read_text()
+
+            region = attrs.get('region')
+            if region:
+                content = self._extract_region(content, region, path=p)
+
+            content = content.strip('\n') + '\n'
+            return fence('java', content)
+
+        def run_java(attrs: dict) -> str:
+            cls = attrs.get('class')
+            if not cls:
+                raise ValueError("run-java directive requires class=\"...\"")
+
+            # Allow short class names for examples (e.g. "QuickStart") by auto-prefixing.
+            if '.' not in cls:
+                fqcn = f"me.bechberger.minicli.examples.{cls}"
+            else:
+                fqcn = cls
+
+            args = attrs.get('args', '')
+            if isinstance(args, list):
+                argv = args
+            else:
+                args_str = str(args).strip()
+                import shlex
+                argv = shlex.split(args_str) if args_str else []
+
+            timeout_s = int(attrs.get('timeoutSeconds', '20'))
+
+            # Rendered command line should match what users can run.
+            shown_cmd = ['./examples/run.sh', cls] + argv
+
+            # Execute via `sh` so run.sh doesn't need the executable bit set.
+            run_sh = (self.project_root / 'examples' / 'run.sh')
+            if not run_sh.exists():
+                raise FileNotFoundError(run_sh)
+
+            exec_cmd = ['sh', str(run_sh)] + ([] if attrs.get('mode') != 'agent' else ['--agent'])
+            exec_cmd += [cls] + argv
+
+            res = subprocess.run(
+                exec_cmd,
+                cwd=self.project_root / 'examples',
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+            out = (res.stdout or '') + (res.stderr or '')
+
+            if res.returncode != 0 and check:
+                raise RuntimeError(f"run-java failed: {' '.join(exec_cmd)}\n{out}")
+
+            body = '> ' + ' '.join(shown_cmd) + '\n' + out
+            return fence('sh', body)
+
+        # Block-based replacement: only replace content between directive and <!-- @minicli:end -->
+        block_re = re.compile(
+            r'(?P<start><!--\s*@minicli:(?P<kind>[a-zA-Z0-9_-]+)\s*(?P<attrs>[^>]*)-->)\s*\n'
+            r'(?P<body>.*?)'
+            r'(?P<end><!--\s*@minicli:end\s*-->)',
+            re.DOTALL,
+        )
+
+        def render_kind(kind: str, attrs: dict) -> str:
+            if kind == 'include-java':
+                return include_java(attrs)
+            if kind == 'run-java':
+                return run_java(attrs)
+            raise ValueError(f"Unknown directive kind: {kind}")
+
+        def replace_block(m: re.Match) -> str:
+            kind = m.group('kind')
+            attrs = parse_attrs(m.group('attrs') or '')
+            try:
+                new_body = render_kind(kind, attrs)
+            except Exception as e:
+                if check:
+                    raise
+                new_body = fence('text', f"[minicli] directive error ({kind}): {e}\n")
+            return m.group('start') + "\n" + new_body + m.group('end')
+
+        rendered = re.sub(block_re, replace_block, original)
+
+        if rendered != original:
+            target.write_text(rendered)
+            print(f"✓ Rendered README directives in {target}")
+            return True
+        return False
+
+    # -------------------------
+    # END README directive rendering
+    # -------------------------
+
     def update_examples_pom_xml(self, old_version: str, new_version: str):
         """Update version in examples/pom.xml (module version + dependency version)."""
         if not self.examples_pom_xml.exists():
@@ -636,6 +842,35 @@ Download `minicli.jar` from the assets below.
         check(self.project_root / 'target' / 'minicli.jar', self._NORMAL_JAR_MAX_BYTES, 'Normal build JAR (minicli.jar)')
         check(self.project_root / 'target' / 'minicli-minimal.jar', self._MINIMAL_JAR_MAX_BYTES, 'Minimal build JAR (minicli-minimal.jar)')
 
+    @staticmethod
+    def _extract_region(content: str, region: str, *, path: Path) -> str:
+        """Extract a region from the content delimited by // region name ... // endregion name.
+
+        Args:
+        - content: The full content string.
+        - region: The region name to extract.
+
+        Returns:
+        - The extracted region content, or the original content if region not found.
+        """
+        region_re = re.compile(r'//\s*region\s+' + re.escape(region) + r'\s*([\s\S]*?)//\s*endregion\s+' + re.escape(region), re.MULTILINE)
+        match = region_re.search(content)
+        if match:
+            return match.group(1).strip()
+        return content
+
+    def _ensure_examples_jar(self):
+        """Ensure the examples fat jar exists.
+
+        The README renderer executes examples via:
+          examples/target/minicli-examples.jar
+        """
+        jar = self.project_root / 'examples' / 'target' / 'minicli-examples.jar'
+        if jar.exists():
+            return
+        # Build the examples module jar.
+        self.run_command(['mvn', '-q', 'package'], 'Building examples jar', cwd=self.project_root / 'examples')
+
 def main():
     parser = argparse.ArgumentParser(
         description='Bump version and deploy minicli library',
@@ -704,6 +939,11 @@ Examples:
         action='store_true',
         help='Only run tests with the minimal build settings (does not deploy)'
     )
+    parser.add_argument(
+        '--render-readme',
+        action='store_true',
+        help='Render @minicli:* directives in README.md (in-place), then exit'
+    )
 
     args = parser.parse_args()
 
@@ -712,6 +952,10 @@ Examples:
     project_root = script_path.parent
 
     bumper = VersionBumper(project_root)
+
+    if args.render_readme:
+        bumper.render_readme_directives(check=True)
+        return
 
     # Standalone commands
     if args.build_minimal:

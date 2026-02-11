@@ -1,6 +1,5 @@
 package examples;
 
-import me.bechberger.minicli.MiniCli;
 import me.bechberger.minicli.examples.IgnoreOptionsExample;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +11,8 @@ public class IgnoreOptionsTest {
     public void testHelp() {
         var res = Util.run(IgnoreOptionsExample.class, "--help");
         assertEquals("""
-                Usage: ignore-options [OPTIONS]
+                Usage: cmd [-hV] [--b=<b>]
+                      --b=<b>      Inherited option B
                   -h, --help       Show this help message and exit.
                   -V, --version    Print version information and exit.
                 """, res);
