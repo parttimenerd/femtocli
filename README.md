@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/minicli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/minicli)](https://central.sonatype.com/artifact/me.bechberger.util/minicli)
 
-Powerful yet minimal command line interface framework for Java applications.
+Powerful yet minimal command line interface framework for Java applications and Java agents.
 
-A minimal (< 40KB) Java command line interface (CLI) framework for building small command line applications,
+A minimal (< 45KB) Java command line interface (CLI) framework for building small command line applications,
 using annotations to define (sub)commands, options, and positional parameters. 
 It is designed for tools where minimizing dependencies and binary size is important.
 
@@ -29,6 +29,7 @@ Features
 - Description placeholders (`${DEFAULT-VALUE}`, `${COMPLETION-CANDIDATES}`)
 - Custom `header`, `customSynopsis`, and `footer` in help output
 - Ability to hide commands and options from help output
+- Support for "agent args" mode, like Java agents
 
 Non-Goals
 ---------
@@ -80,23 +81,23 @@ class MyApp implements Runnable {
 Maven dependency
 ----------------
 
-Add the library as a dependency in your project (< 50KB):
+Add the library as a dependency in your project (< 55KB):
 
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli</artifactId>
-  <version>0.1.10</version>
+  <version>0.1.11</version>
 </dependency>
 ```
 
-And for the minimal version without debug metadata (< 40KB):
+And for the minimal version without debug metadata (< 45KB):
 
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>minicli-minimal</artifactId>
-  <version>0.1.10</version>
+  <version>0.1.11</version>
 </dependency>
 ```
 
@@ -441,6 +442,57 @@ class WithMixin implements Runnable {
 ```
 
 Matching rules can be option names (e.g. `"--b"`, `"-b"`) or field names via `"field:<name>"`.
+
+### Agent args mode (comma-separated arguments)
+
+Some environments make passing standard CLI arguments hard (spaces, quoting, escaping). For these cases, MiniCli
+can also be driven by a single comma-separated "agent args" string and translate it into the normal `String[] args`.
+
+Use the `MiniCli.runAgent(...)` overload:
+
+```java
+System.exit(MiniCli.runAgent(new MyApp(), "greet,name=Alice,count=2"));
+```
+
+Rules:
+- tokens are separated by `,`
+- whitespace around tokens is trimmed
+- escapes: `\\` (backslash), `\,` (comma), `\=` (equals)
+- single-quoted tokens can contain commas/spaces without escaping, e.g. `'--msg=hello, world'`
+- empty tokens (from `,,` or a trailing comma) are rejected; use `--opt=` to pass an empty value
+
+Agent-mode extras:
+- `help` and `version` are accepted as bare tokens (at any depth).
+  For example, `sub,help` is equivalent to `sub,--help`.
+- Option names can be passed *without* leading dashes when unambiguous (useful in restricted environments).
+  Example: `req=x` is normalized to `--req=x` if `--req` is a known option for the current command.
+
+Agent-mode help output:
+- The `Usage:` line is formatted as an *agent-args string* (comma-separated) and omits leading dashes in option names.
+- The help screen focuses on `Usage:` + `Options` (+ `Commands:` when applicable).
+
+Example mapping:
+- normal CLI: `start --blub --bla 34`
+- agent args: `start,--blub,--bla,34` (or `start,--blub,--bla=34`)
+
+Example (subcommand help):
+
+```java
+// prints agent-mode help for the `sub` command
+RunResult res = MiniCli.runAgentCaptured(new Root(), "sub,help");
+System.out.println(res.out());
+```
+
+Output (sketch):
+
+```
+Usage: root,sub,[hV],req=<req>,[flag]
+Options
+      flag       flag
+  h, help       Show this help message and exit.
+      req=<req>  Required (required)
+  V, version    Print version information and exit.
+```
 
 Testing
 -------
