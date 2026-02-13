@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.2.1] - 2026-02-13
+
+### Changed
+- `run` and `runCaptured` methods now accepts varargs of `String` instead of `String[]` for better usability
+
 ## [0.2.0] - 2026-02-11
 
 ### Changed
