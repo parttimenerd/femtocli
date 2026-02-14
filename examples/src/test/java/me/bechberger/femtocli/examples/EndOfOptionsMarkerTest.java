@@ -9,12 +9,10 @@ public class EndOfOptionsMarkerTest {
 
     @Test
     public void testEndOfOptions() {
-        var res = FemtoCli.runCaptured(new EndOfOptionsMarker(), new String[]{
-                "--name", "test",
+        var res = FemtoCli.runCaptured(new EndOfOptionsMarker(), "--name", "test",
                 "--",
                 "--not-an-option",
-                "-also-not"
-        });
+                "-also-not");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 name=test

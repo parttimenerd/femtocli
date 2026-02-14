@@ -24,7 +24,7 @@ class AgentCliTest {
 
     @Test
     public void testNonAgentRootHelp() {
-        var res = FemtoCli.runCaptured(new AgentCli(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new AgentCli(), "--help");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 Usage: agent-cli [-hV] [COMMAND]
@@ -39,7 +39,7 @@ class AgentCliTest {
 
     @Test
     public void testStopHelp() {
-        var res = FemtoCli.runCaptured(new AgentCli(), new String[]{"stop", "--help"});
+        var res = FemtoCli.runCaptured(new AgentCli(), "stop", "--help");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 Usage: agent-cli stop [-hV] --output=<output> [--verbose] <mode>

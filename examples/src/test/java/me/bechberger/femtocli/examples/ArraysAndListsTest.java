@@ -9,12 +9,10 @@ public class ArraysAndListsTest {
 
     @Test
     public void testArraysAndLists() {
-        var res = FemtoCli.runCaptured(new ArraysAndLists(), new String[]{
-                "--xs=a,b",
+        var res = FemtoCli.runCaptured(new ArraysAndLists(), "--xs=a,b",
                 "--ys=c,d",
                 "rest1",
-                "rest2"
-        });
+                "rest2");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 xs=[a, b]

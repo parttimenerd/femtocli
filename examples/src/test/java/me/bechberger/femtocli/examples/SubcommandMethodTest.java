@@ -9,7 +9,7 @@ public class SubcommandMethodTest {
 
     @Test
     public void testCommand() {
-        var res = FemtoCli.runCaptured(new SubcommandMethod(), new String[]{"status"});
+        var res = FemtoCli.runCaptured(new SubcommandMethod(), "status");
         assertEquals("""
                 OK
                 """, res.out());

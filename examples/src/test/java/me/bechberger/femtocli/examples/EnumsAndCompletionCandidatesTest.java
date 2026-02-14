@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class EnumsAndCompletionCandidatesTest {
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates(), "--help");
         assertEquals("""
                 Usage: enums [-hV] [--mode=<mode>]
                   -h, --help       Show this help message and exit.
@@ -20,13 +20,13 @@ public class EnumsAndCompletionCandidatesTest {
 
     @Test
     public void testDefault() {
-         var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates(), new String[0]);
+         var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates());
          assertEquals("Mode: safe\n", res.out());
     }
 
     @Test
     public void testFast() {
-         var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates(), new String[]{"--mode", "fast"});
+         var res = FemtoCli.runCaptured(new EnumsAndCompletionCandidates(), "--mode", "fast");
          assertEquals("Mode: fast\n", res.out());
     }
 }

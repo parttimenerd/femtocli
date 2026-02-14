@@ -9,7 +9,7 @@ public class QuickStartTest {
 
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new QuickStart(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new QuickStart(), "--help");
         assertEquals("""
                 Usage: myapp [-hV] [COMMAND]
                 My CLI application
@@ -22,7 +22,7 @@ public class QuickStartTest {
 
     @Test
     public void testGreetHelp() {
-        var res = FemtoCli.runCaptured(new QuickStart(), new String[]{"greet", "--help"});
+        var res = FemtoCli.runCaptured(new QuickStart(), "greet", "--help");
         assertEquals("""
                 Usage: myapp greet [-hV] --name=<name> [--count=<count>]
                 Greet a person
@@ -35,7 +35,7 @@ public class QuickStartTest {
 
     @Test
     public void testGreet() {
-        var res = FemtoCli.runCaptured(new QuickStart(), new String[]{"greet", "--name=World", "--count=1"});
+        var res = FemtoCli.runCaptured(new QuickStart(), "greet", "--name=World", "--count=1");
         assertEquals("Hello, World!\n", res.out());
     }
 }

@@ -37,7 +37,7 @@ class FemtoCliBooleanParsingReproTest {
         var err = new ByteArrayOutputStream();
 
         int exit = FemtoCli.run(new Cmd(), new PrintStream(out), new PrintStream(err),
-                new String[]{"--boxed", "false"});
+                "--boxed", "false");
 
         assertEquals(0, exit, "FemtoCli should accept an explicit boolean value for boxed Boolean");
     }
@@ -48,7 +48,7 @@ class FemtoCliBooleanParsingReproTest {
         var err = new ByteArrayOutputStream();
 
         int exit = FemtoCli.run(new Cmd(), new PrintStream(out), new PrintStream(err),
-                new String[]{"--prim"});
+                "--prim");
 
         assertEquals(0, exit, "FemtoCli should accept primitive boolean flags without a value");
     }
@@ -59,7 +59,7 @@ class FemtoCliBooleanParsingReproTest {
         var err = new ByteArrayOutputStream();
 
         int exit = FemtoCli.run(new Cmd(), new PrintStream(out), new PrintStream(err),
-                new String[]{"--prim", "false"});
+                "--prim", "false");
 
         assertEquals(0, exit, "FemtoCli should accept an explicit boolean value for primitive boolean too");
     }

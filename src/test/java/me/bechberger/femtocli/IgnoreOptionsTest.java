@@ -83,11 +83,11 @@ public class IgnoreOptionsTest {
     public void excludeInheritedOption() {
         ExcludeOne cmd = new ExcludeOne();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--a", "1"});
+        var res = FemtoCli.runCaptured(cmd, "--a", "1");
         assertEquals(2, res.exitCode());
         assertTrue(res.err().contains("Unknown option"));
 
-        var res2 = FemtoCli.runCaptured(cmd, new String[]{"--b", "2"});
+        var res2 = FemtoCli.runCaptured(cmd, "--b", "2");
         assertEquals(0, res2.exitCode());
         assertEquals(2, cmd.b);
     }
@@ -96,11 +96,11 @@ public class IgnoreOptionsTest {
     public void ignoreAllThenIncludeOne() {
         OnlyB cmd = new OnlyB();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--a", "1"});
+        var res = FemtoCli.runCaptured(cmd, "--a", "1");
         assertEquals(2, res.exitCode());
         assertTrue(res.err().contains("Unknown option"));
 
-        var res2 = FemtoCli.runCaptured(cmd, new String[]{"--b", "7"});
+        var res2 = FemtoCli.runCaptured(cmd, "--b", "7");
         assertEquals(0, res2.exitCode());
         assertEquals(7, cmd.b);
     }
@@ -109,7 +109,7 @@ public class IgnoreOptionsTest {
     public void canFilterOptionsFromMixinsToo() {
         WithMixin cmd = new WithMixin();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--m", "3"});
+        var res = FemtoCli.runCaptured(cmd, "--m", "3");
         assertEquals(2, res.exitCode());
         assertTrue(res.err().contains("Unknown option"));
     }
@@ -118,7 +118,7 @@ public class IgnoreOptionsTest {
     public void canFilterMixinOptionsEvenIfMixinIsDeclaredInBaseClass() {
         SubOfBaseWithMixin cmd = new SubOfBaseWithMixin();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--m2", "1"});
+        var res = FemtoCli.runCaptured(cmd, "--m2", "1");
         assertEquals(2, res.exitCode());
         assertTrue(res.err().contains("Unknown option"));
     }
@@ -127,7 +127,7 @@ public class IgnoreOptionsTest {
     public void mixinsInParentClassesAreConsideredWhenCollectingOptions() {
         SubOfBaseWithCollectableMixin cmd = new SubOfBaseWithCollectableMixin();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--mi", "42"});
+        var res = FemtoCli.runCaptured(cmd, "--mi", "42");
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(42, cmd.mixin.mi);

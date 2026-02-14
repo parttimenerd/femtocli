@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class BooleanExplicitValuesTest {
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new BooleanExplicitValues(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new BooleanExplicitValues(), "--help");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 Usage: bools [-hV] [--boxed] [--prim]
@@ -22,7 +22,7 @@ public class BooleanExplicitValuesTest {
 
     @Test
     public void testExplicitValues() {
-        var res = FemtoCli.runCaptured(new BooleanExplicitValues(), new String[]{"--boxed=false", "--prim", "false"});
+        var res = FemtoCli.runCaptured(new BooleanExplicitValues(), "--boxed=false", "--prim", "false");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 boxed=false

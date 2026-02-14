@@ -14,7 +14,7 @@ public class MixinsAndSubcommandsTest {
 
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), "--help");
         assertEquals(normalize("""
                 Usage: mixins [-hV] [COMMAND]
                   -h, --help       Show this help message and exit.
@@ -27,7 +27,7 @@ public class MixinsAndSubcommandsTest {
 
     @Test
     public void testSubCommandHelp() {
-        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), new String[]{"a", "--help"});
+        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), "a", "--help");
         assertEquals(normalize("""
                 Usage: mixins a [-hV] [--verbose]
                   -h, --help       Show this help message and exit.
@@ -38,7 +38,7 @@ public class MixinsAndSubcommandsTest {
 
     @Test
     public void testSubCommand() {
-        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), new String[]{"a"});
+        var res = FemtoCli.runCaptured(new MixinsAndSubcommands(), "a");
         assertEquals("Verbose: false\n", res.out());
     }
 }

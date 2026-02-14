@@ -9,7 +9,7 @@ public class SpecInjectionTest {
 
     @Test
     public void testSpecInjection() {
-        var res = FemtoCli.runCaptured(new SpecInjection(), new String[]{"--interval", "10ms"});
+        var res = FemtoCli.runCaptured(new SpecInjection(), "--interval", "10ms");
         assertEquals("""
                 interval = 10
                 Usage: inspect [-hV] [--interval=<interval>]

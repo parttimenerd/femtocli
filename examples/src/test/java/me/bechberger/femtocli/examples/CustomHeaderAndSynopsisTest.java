@@ -9,7 +9,7 @@ public class CustomHeaderAndSynopsisTest {
 
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new CustomHeaderAndSynopsis(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new CustomHeaderAndSynopsis(), "--help");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 My Tool

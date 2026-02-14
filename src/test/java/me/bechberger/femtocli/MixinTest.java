@@ -49,12 +49,12 @@ public class MixinTest {
     public void helpOutputIncludesOptionsFromMixinsDeclaredInParentClasses() {
         SubCmd cmd = new SubCmd();
 
-        var help = FemtoCli.runCaptured(cmd, new String[]{"--help"});
+        var help = FemtoCli.runCaptured(cmd, "--help");
         assertEquals(0, help.exitCode());
         assertTrue(help.out().contains("--mi"), () -> "Expected help to contain --mi, got:\n" + help.out());
 
         // parsing doesn't happen on --help, so verify assignment in a separate run
-        var run = FemtoCli.runCaptured(cmd, new String[]{"--mi", "123"});
+        var run = FemtoCli.runCaptured(cmd, "--mi", "123");
         assertEquals(0, run.exitCode());
         assertNotNull(cmd.mixin, "Expected inherited @Mixin field to be initialized");
         assertEquals(123, cmd.mixin.mi);
@@ -64,7 +64,7 @@ public class MixinTest {
     public void basicMixinIsInitializedAndValuesAreAssigned() {
         CmdWithBasicMixin cmd = new CmdWithBasicMixin();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--x", "10", "--flag"});
+        var res = FemtoCli.runCaptured(cmd, "--x", "10", "--flag");
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(10, cmd.mixin.x);
@@ -75,7 +75,7 @@ public class MixinTest {
     public void basicMixinDefaultValuesAreApplied() {
         CmdWithBasicMixin cmd = new CmdWithBasicMixin();
 
-        var res = FemtoCli.runCaptured(cmd, new String[]{});
+        var res = FemtoCli.runCaptured(cmd);
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(7, cmd.mixin.d);

@@ -9,7 +9,7 @@ public class HiddenCommandsAndOptionsTest {
 
     @Test
     public void testHelpHidesOptionAndCommand() {
-        var res = FemtoCli.runCaptured(new HiddenCommandsAndOptions(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new HiddenCommandsAndOptions(), "--help");
         assertEquals(0, res.exitCode());
         assertEquals("""
                 Usage: hidden [-hV] [--verbose] [COMMAND]
@@ -25,7 +25,7 @@ public class HiddenCommandsAndOptionsTest {
     @Test
     public void testCommandStillRunsWhenHidden() {
         // Hidden commands should still be invokable.
-        var res = FemtoCli.runCaptured(new HiddenCommandsAndOptions(), new String[]{"internal"});
+        var res = FemtoCli.runCaptured(new HiddenCommandsAndOptions(), "internal");
         assertEquals(0, res.exitCode());
         assertEquals("INTERNAL\n", res.out());
     }

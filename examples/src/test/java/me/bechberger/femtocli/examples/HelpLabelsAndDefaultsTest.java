@@ -9,7 +9,7 @@ public class HelpLabelsAndDefaultsTest {
 
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new HelpLabelsAndDefaults(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new HelpLabelsAndDefaults(), "--help");
         assertEquals("""
                 Usage: help-labels [-hV] [--output=FILE] INPUT [LEVEL]
                       INPUT        Input file
@@ -23,7 +23,7 @@ public class HelpLabelsAndDefaultsTest {
 
      @Test
      public void testDefault() {
-          var res = FemtoCli.runCaptured(new HelpLabelsAndDefaults(), new String[]{"in.txt"});
+          var res = FemtoCli.runCaptured(new HelpLabelsAndDefaults(), "in.txt");
           assertEquals("""
                   Input: in.txt
                   Output: out.txt

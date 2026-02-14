@@ -10,7 +10,7 @@ public class CustomTypeVerifiersTest {
 
     @Test
     public void testCustomTypeVerifiers() {
-        var res = FemtoCli.runCaptured(new CustomTypeVerifiers(), new String[]{"--port", "0"});
+        var res = FemtoCli.runCaptured(new CustomTypeVerifiers(), "--port", "0");
         assertEquals(2, res.exitCode(), res.err());
         assertTrue(res.err().contains("port out of range"), res.err());
     }

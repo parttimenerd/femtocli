@@ -25,7 +25,7 @@ public class MixinStaticFieldTest {
     @Test
     public void staticMixinFieldIsRejected() {
         CmdWithStaticMixin cmd = new CmdWithStaticMixin();
-        var res = FemtoCli.runCaptured(cmd, new String[]{"--help"});
+        var res = FemtoCli.runCaptured(cmd, "--help");
         assertEquals(1, res.exitCode());
         assertTrue(res.err().contains("@Mixin field must not be static"), () -> "Unexpected stderr: " + res.err());
     }

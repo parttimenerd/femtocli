@@ -75,15 +75,15 @@ public final class FemtoCli {
      * Run the CLI with the given root command object and arguments,
      * and use the passed output and error streams for FemtoCli output.
      */
-    public static int run(Object root, PrintStream out, PrintStream err, String[] args) {
+    public static int run(Object root, PrintStream out, PrintStream err, String... args) {
         return execute(root, out, err, args, Map.of(), new CommandConfig(), false);
     }
 
-    public static RunResult runCaptured(Object root, String[] args) {
+    public static RunResult runCaptured(Object root, String... args) {
         return builder().runCaptured(root, args);
     }
 
-    public static int run(Object root, String[] args) {
+    public static int run(Object root, String... args) {
         return builder().run(root, args);
     }
 

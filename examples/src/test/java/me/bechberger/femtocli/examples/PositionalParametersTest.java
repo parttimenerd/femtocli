@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class PositionalParametersTest {
     @Test
     public void testHelp() {
-        var res = FemtoCli.runCaptured(new PositionalParameters(), new String[]{"--help"});
+        var res = FemtoCli.runCaptured(new PositionalParameters(), "--help");
         assertEquals("""
                 Usage: positionalparameters [-hV] FILE [ARGS...]
                       FILE         Input file
@@ -20,7 +20,7 @@ public class PositionalParametersTest {
 
     @Test
     public void testPositionalParameters() {
-        var res = FemtoCli.runCaptured(new PositionalParameters(), new String[]{"in.txt", "arg1", "arg2"});
+        var res = FemtoCli.runCaptured(new PositionalParameters(), "in.txt", "arg1", "arg2");
         assertEquals("""
                 File: in.txt
                 Args: [arg1, arg2]

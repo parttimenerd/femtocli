@@ -36,11 +36,11 @@ public class InheritedMixinEdgeCasesTest {
     public void mixinDeclaredInBaseClassIsDiscoveredAndInitializedForSubclass() {
         SubOfBase cmd = new SubOfBase();
 
-        var help = FemtoCli.runCaptured(cmd, new String[]{"--help"});
+        var help = FemtoCli.runCaptured(cmd, "--help");
         assertEquals(0, help.exitCode());
         assertTrue(help.out().contains("--bm"), () -> "Expected help to contain --bm, got:\n" + help.out());
 
-        var run = FemtoCli.runCaptured(cmd, new String[]{"--bm", "5"});
+        var run = FemtoCli.runCaptured(cmd, "--bm", "5");
         assertEquals(0, run.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(5, cmd.mixin.bm);
