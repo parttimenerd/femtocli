@@ -137,7 +137,7 @@
                 <configuration>
                     <doclint>none</doclint>
                     <quiet>true</quiet>
-                    <release>21</release>
+                    <release>17</release>
                 </configuration>
             </plugin>
 
