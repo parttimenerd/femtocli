@@ -171,8 +171,8 @@ final class CommandModel {
         // Collect mixin options first, then command options (so command overrides same-name options)
         for (Field field : FemtoCli.allFields(cmd.getClass())) {
             field.setAccessible(true);
-            if (field.getAnnotation(Mixin.class) != null && field.get(cmd) instanceof Object mixin) {
-                collectOptionsFrom(mixin, optionsByName, optionByField, options, namesByBareAndField);
+            if (field.getAnnotation(Mixin.class) != null && field.get(cmd) != null) {
+                collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options, namesByBareAndField);
             }
         }
         collectOptionsFrom(cmd, optionsByName, optionByField, options, namesByBareAndField);

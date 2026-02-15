@@ -275,7 +275,7 @@ public final class FemtoCli {
         if (!token.contains("=")) {
             List<String> candidates = getCandidates(token, model);
             if (candidates.size() == 1) {
-                return candidates.getFirst();
+                return candidates.get(0);
             }
             if (candidates.size() > 1) {
                 throw new UsageEx(cmdForErrors,
@@ -312,13 +312,13 @@ public final class FemtoCli {
                         return c + token.substring(eq);
                     }
                 }
-                return candidates.getFirst() + token.substring(eq);
+                return candidates.get(0) + token.substring(eq);
             }
 
             throw new UsageEx(cmdForErrors,
                     "Ambiguous bare option '" + bareName + "' (use full name): " + String.join(", ", candidates));
         }
-        return candidates.getFirst() + token.substring(eq);
+        return candidates.get(0) + token.substring(eq);
     }
 
     private static List<String> getCandidates(String token, CommandModel model) {
@@ -720,7 +720,7 @@ public final class FemtoCli {
                                         Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         if (paramInfos.isEmpty()) {
             if (!positionals.isEmpty()) {
-                throw new UsageEx(cmd, "Unexpected parameter: " + positionals.getFirst());
+                throw new UsageEx(cmd, "Unexpected parameter: " + positionals.get(0));
             }
             return;
         }
@@ -747,7 +747,7 @@ public final class FemtoCli {
 
         // Check for extra positionals
         if (currentIndex < positionals.size()) {
-            ParamInfo lastParam = paramInfos.getLast();
+            ParamInfo lastParam = paramInfos.get(paramInfos.size() - 1);
             boolean lastIsVarargs = lastParam.indexRange[1] == -1
                                     || lastParam.field.getType().isArray()
                                     || List.class.isAssignableFrom(lastParam.field.getType());
@@ -802,7 +802,7 @@ public final class FemtoCli {
             }
             field.set(cmd, list);
         } else if (!values.isEmpty()) {
-            Object converted = convert(values.getFirst(), field.getType(), field.getName(), null, converters, cmd);
+            Object converted = convert(values.get(0), field.getType(), field.getName(), null, converters, cmd);
             runVerifiers(cmd, converted, null, paramInfo.param);
             field.set(cmd, converted);
         }
