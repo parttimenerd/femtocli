@@ -9,6 +9,7 @@ import me.bechberger.femtocli.annotations.Command;
  */
 public class CommandConfig {
     public static final String DEFAULT_TEMPLATE = " (default ${DEFAULT-VALUE})";
+    public static final String DEFAULT_SUGGESTION_TEMPLATE = "\n  tip: a similar argument exists: '${SUGGESTION}'";
 
     public boolean emptyLineAfterUsage;
     public boolean emptyLineAfterDescription;
@@ -17,6 +18,12 @@ public class CommandConfig {
     public String defaultValueHelpTemplate = DEFAULT_TEMPLATE;
     public boolean defaultValueOnNewLine;
     public String version = "";
+    public boolean suggestSimilarOptions = true;
+    public String similarOptionsSuggestionTemplate = DEFAULT_SUGGESTION_TEMPLATE;
+    /** Exit code to return when --help is requested (default: 0) */
+    public int helpExitCode = 0;
+    /** Print usage to stdout instead of stderr when there's a CLI usage error (default: false, prints to stderr) */
+    public boolean usageErrorsToStdout = false;
 
     public CommandConfig() {
     }
@@ -33,6 +40,10 @@ public class CommandConfig {
         c.defaultValueHelpTemplate = defaultValueHelpTemplate;
         c.defaultValueOnNewLine = defaultValueOnNewLine;
         c.version = version;
+        c.suggestSimilarOptions = suggestSimilarOptions;
+        c.similarOptionsSuggestionTemplate = similarOptionsSuggestionTemplate;
+        c.helpExitCode = helpExitCode;
+        c.usageErrorsToStdout = usageErrorsToStdout;
         return c;
     }
 

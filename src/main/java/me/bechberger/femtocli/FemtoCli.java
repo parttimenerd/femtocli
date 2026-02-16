@@ -134,6 +134,9 @@ public final class FemtoCli {
                                Map<Class<?>, TypeConverter<?>> converters,
                                CommandConfig commandConfig,
                                boolean agentMode) {
+        if (root instanceof String) {
+            throw new IllegalArgumentException("Root command cannot be a String (got " + root + ").");
+        }
         UsageContext previous = USAGE_CONTEXT.get();
         try {
             var tokens = new ArrayDeque<>(Arrays.asList(args));
@@ -155,7 +158,7 @@ public final class FemtoCli {
                 if (isHelp(next)) {
                     USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     usage(cmd, out);
-                    return 0;
+                    return commandConfig.helpExitCode;
                 }
                 if (isVersion(next)) {
                     USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
@@ -207,16 +210,19 @@ public final class FemtoCli {
             Object target = e.cmd != null ? e.cmd : root;
             if (e.help) {
                 usage(target, out);
-                return 0;
+                return commandConfig.helpExitCode;
             }
             if (e.version) {
                 version(root, out);
                 return 0;
             }
-            err.println("Error: " + e.getMessage());
-            usage(target, out);
+            // Print error and usage to stderr by default, or stdout if configured
+            PrintStream errorStream = commandConfig.usageErrorsToStdout ? out : err;
+            errorStream.println("Error: " + e.getMessage());
+            errorStream.println();
+            usage(target, errorStream);
             return 2;
-        } catch (FieldIsFinalException e) {
+        } catch (FieldIsFinalException | IllegalStateException e) {
             throw e;
         } catch (Exception e) {
             err.println("Error: " + e.getMessage());
@@ -403,6 +409,9 @@ public final class FemtoCli {
         var model = CommandModel.of(cmd);
         injectSpecFromContext(model);
 
+        UsageContext ctx = USAGE_CONTEXT.get();
+        CommandConfig config = ctx != null ? ctx.commandConfig : new CommandConfig();
+
         // Parse tokens
         Set<Field> seenFields = new HashSet<>();
         Set<Field> seenFieldsWithoutValue = new HashSet<>();
@@ -419,7 +428,7 @@ public final class FemtoCli {
             }
 
             if (acceptOptions && token.startsWith("-")) {
-                parseOption(model, cmd, token, tokens, seenFields, seenFieldsWithoutValue, multiValueFields, converters);
+                parseOption(model, cmd, token, tokens, seenFields, seenFieldsWithoutValue, multiValueFields, converters, config);
             } else {
                 positionals.add(token);
             }
@@ -528,14 +537,23 @@ public final class FemtoCli {
                                     Set<Field> seenFields,
                                     Set<Field> seenFieldsWithoutValue,
                                     Map<Field, List<String>> multiValueFields,
-                                    Map<Class<?>, TypeConverter<?>> converters) throws Exception {
+                                    Map<Class<?>, TypeConverter<?>> converters,
+                                    CommandConfig config) throws Exception {
         int eqIndex = token.indexOf('=');
         String name = eqIndex >= 0 ? token.substring(0, eqIndex) : token;
         String value = eqIndex >= 0 ? token.substring(eqIndex + 1) : null;
 
         OptionMeta optMeta = model.optionsByName.get(name);
         if (optMeta == null) {
-            throw new UsageEx(cmd, "Unknown option: " + name);
+            String errorMsg = "Unknown option: " + name;
+            if (config.suggestSimilarOptions) {
+                String suggestion = findSimilarOption(name, model.optionsByName.keySet());
+                if (suggestion != null) {
+                    String template = "\n" + config.similarOptionsSuggestionTemplate;
+                    errorMsg += template.replace("${SUGGESTION}", suggestion);
+                }
+            }
+            throw new UsageEx(cmd, errorMsg);
         }
         seenFields.add(optMeta.field);
 
@@ -1025,18 +1043,54 @@ public final class FemtoCli {
      * Used by help placeholder ${COMPLETION-CANDIDATES}.
      */
     static String enumCandidates(Class<?> type) {
-        if (type == null || !type.isEnum()) {
-            return "";
-        }
+        return enumCandidates(type, null, ", ");
+    }
+
+    static String enumCandidates(Class<?> type, me.bechberger.femtocli.annotations.Option opt) {
+        return enumCandidates(type, opt, ", ");
+    }
+
+    /**
+     * Used by help placeholder ${COMPLETION-CANDIDATES}.
+     * If opt is provided and showEnumDescriptions is true, includes descriptions from getDescription() method.
+     * Uses the provided joiner to separate enum values (defaults to ", ").
+     */
+    static String enumCandidates(Class<?> type, me.bechberger.femtocli.annotations.Option opt, String joiner) {
+        if (type == null || !type.isEnum()) return "";
         Object[] constants = type.getEnumConstants();
-        if (constants == null || constants.length == 0) {
-            return "";
+        if (constants == null || constants.length == 0) return "";
+
+        boolean showDescriptions = opt != null && opt.showEnumDescriptions();
+        Method descMethod = null;
+
+        if (showDescriptions) {
+            try {
+                descMethod = type.getDeclaredMethod("getDescription");
+                descMethod.setAccessible(true);
+                if (!String.class.isAssignableFrom(descMethod.getReturnType())) {
+                    throw new IllegalStateException("Enum " + type.getName() +
+                        " getDescription() must return String");
+                }
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("Enum " + type.getName() +
+                    " missing getDescription() method with showEnumDescriptions=true", e);
+            }
         }
-        StringJoiner joiner = new StringJoiner(", ");
+
+        StringJoiner sj = new StringJoiner(joiner);
         for (Object c : constants) {
-            joiner.add(String.valueOf(c));
+            if (showDescriptions) {
+                try {
+                    String desc = (String) descMethod.invoke(c);
+                    sj.add((desc != null && !desc.isBlank()) ? c + " (" + desc + ")" : String.valueOf(c));
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to invoke getDescription() on " + c, e);
+                }
+            } else {
+                sj.add(String.valueOf(c));
+            }
         }
-        return joiner.toString();
+        return sj.toString();
     }
 
     private static void injectSpec(CommandModel model,
@@ -1129,5 +1183,54 @@ public final class FemtoCli {
                 || (targetType == short.class && actualType == Short.class)
                 || (targetType == byte.class && actualType == Byte.class)
                 || (targetType == char.class && actualType == Character.class);
+    }
+
+    /**
+     * Find a similar option name using Levenshtein distance.
+     * Returns the most similar option if it's reasonably close, otherwise null.
+     */
+    private static String findSimilarOption(String invalidOption, Set<String> validOptions) {
+        if (validOptions.isEmpty()) return null;
+
+        String bestMatch = null;
+        int bestDistance = Integer.MAX_VALUE;
+
+        for (String validOption : validOptions) {
+            int distance = levenshteinDistance(invalidOption, validOption);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestMatch = validOption;
+            }
+        }
+
+        return bestDistance <= Math.max(2, invalidOption.length() / 2) ? bestMatch : null;
+    }
+
+    /**
+     * Calculate the Levenshtein distance between two strings.
+     * This is the minimum number of single-character edits (insertions, deletions, or substitutions)
+     * required to change one string into the other.
+     */
+    private static int levenshteinDistance(String s1, String s2) {
+        int len1 = s1.length();
+        int len2 = s2.length();
+
+        int[] prev = new int[len2 + 1];
+        int[] curr = new int[len2 + 1];
+
+        for (int j = 0; j <= len2; j++) prev[j] = j;
+
+        for (int i = 1; i <= len1; i++) {
+            curr[0] = i;
+            for (int j = 1; j <= len2; j++) {
+                curr[j] = s1.charAt(i - 1) == s2.charAt(j - 1) ? prev[j - 1] :
+                    1 + Math.min(prev[j], Math.min(curr[j - 1], prev[j - 1]));
+            }
+            int[] tmp = prev;
+            prev = curr;
+            curr = tmp;
+        }
+
+        return prev[len2];
     }
 }

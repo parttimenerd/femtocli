@@ -8,11 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+- Suggest similar options when an unknown option is provided (e.g., `tip: a similar argument exists: '--input-file'`)
+- `CommandConfig.suggestSimilarOptions` option to enable/disable similar option suggestions (enabled by default)
+- Custom joiner syntax for `${COMPLETION-CANDIDATES:$JOINER}` placeholder
 
 ## [0.2.2] - 2026-02-15
 

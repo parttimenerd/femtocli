@@ -136,11 +136,16 @@ class VersionBumper:
           - Or as a JSON array of strings (no quoting ambiguity):
               <!-- @femtocli:run-java class="QuickStart" args=["greet","--name=World","--count=1"] -->
 
+          Optional attributes:
+          - should_err="true": expect the command to fail (exit with non-zero code)
+              <!-- @femtocli:run-java class="DidYouMean" args=["--input_file", "test.txt"] should_err="true" -->
+
           The rendered output uses a single `sh` code fence and starts with a
           copy/pastable command line using `./examples/run.sh`.
 
         Notes:
         - Errors are embedded if check=False; if check=True, the renderer fails fast.
+        - Use should_err="true" for examples that demonstrate error handling or validation.
 
         Returns True if the README changed.
         """
@@ -235,6 +240,7 @@ class VersionBumper:
                 argv = shlex.split(args_str) if args_str else []
 
             timeout_s = int(attrs.get('timeoutSeconds', '20'))
+            should_err = attrs.get('should_err', '').lower() == 'true'
 
             # Rendered command line should match what users can run.
             shown_cmd = ['./examples/run.sh', cls] + argv
@@ -256,7 +262,12 @@ class VersionBumper:
             )
             out = (res.stdout or '') + (res.stderr or '')
 
-            if res.returncode != 0 and check:
+            # If should_err=true, verify that the command actually failed
+            if should_err and res.returncode == 0:
+                raise RuntimeError(f"run-java expected non-zero exit code but got 0: {' '.join(exec_cmd)}")
+
+            # If should_err=false (default), fail on non-zero exit code when check=True
+            if not should_err and res.returncode != 0 and check:
                 raise RuntimeError(f"run-java failed: {' '.join(exec_cmd)}\n{out}")
 
             body = '> ' + ' '.join(shown_cmd) + '\n' + out

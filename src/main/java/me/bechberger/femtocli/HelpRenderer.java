@@ -180,7 +180,7 @@ final class HelpRenderer {
             if (opt.opt.hidden()) continue;
 
             String names = formatOptionNames(opt, agentMode);
-            String description = expandPlaceholders(opt.opt.description(), opt.opt.defaultValue(), opt.field.getType());
+            String description = expandPlaceholders(opt.opt.description(), opt.opt.defaultValue(), opt.field.getType(), opt.opt);
             description = maybeAppendDefaultValue(description, opt.opt, commandConfig, annotation);
             if (opt.opt.required()) description += " (required)";
 
@@ -273,33 +273,32 @@ final class HelpRenderer {
     }
 
     private static List<String> wrapLines(String text, int maxWidth) {
-        if (text == null || text.isEmpty()) {
-            return List.of();
-        }
-        if (maxWidth <= 0 || text.length() <= maxWidth) {
-            return List.of(text);
-        }
+        if (text == null || text.isEmpty()) return List.of();
 
-        List<String> lines = new ArrayList<>();
-        String[] words = text.split(" ");
-        StringBuilder currentLine = new StringBuilder();
+        List<String> result = new ArrayList<>();
+        for (String line : text.split("\n", -1)) {
+            if (line.isEmpty()) continue;
 
-        for (String word : words) {
-            if (currentLine.isEmpty()) {
-                currentLine.append(word);
-            } else if (currentLine.length() + 1 + word.length() <= maxWidth) {
-                currentLine.append(" ").append(word);
+            if (maxWidth <= 0 || line.length() <= maxWidth) {
+                result.add(line);
             } else {
-                lines.add(currentLine.toString());
-                currentLine = new StringBuilder(word);
+                StringBuilder sb = new StringBuilder();
+                for (String word : line.split(" ")) {
+                    if (sb.length() == 0) {
+                        sb.append(word);
+                    } else if (sb.length() + 1 + word.length() <= maxWidth) {
+                        sb.append(" ").append(word);
+                    } else {
+                        result.add(sb.toString());
+                        sb.setLength(0);
+                        sb.append(word);
+                    }
+                }
+                if (sb.length() > 0) result.add(sb.toString());
             }
         }
 
-        if (!currentLine.isEmpty()) {
-            lines.add(currentLine.toString());
-        }
-
-        return lines;
+        return result.isEmpty() ? List.of(text) : result;
     }
 
     private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommandClasses,
@@ -354,10 +353,50 @@ final class HelpRenderer {
         }
     }
 
-    private static String expandPlaceholders(String description, String defaultValue, Class<?> type) {
-        return description
-                .replace("${DEFAULT-VALUE}", defaultValue.equals(NO_DEFAULT_VALUE) ? "none" : defaultValue)
-                .replace("${COMPLETION-CANDIDATES}", FemtoCli.enumCandidates(type));
+    private static String expandPlaceholders(String description, String defaultValue, Class<?> type, Option opt) {
+        String result = description
+                .replace("${DEFAULT-VALUE}", defaultValue.equals(NO_DEFAULT_VALUE) ? "none" : defaultValue);
+
+        // Handle ${COMPLETION-CANDIDATES} with optional joiner: ${COMPLETION-CANDIDATES:, } or ${COMPLETION-CANDIDATES:\n}
+        if (result.contains("${COMPLETION-CANDIDATES")) {
+            result = expandCompletionCandidates(result, type, opt);
+        }
+
+        return result;
+    }
+
+    private static String expandCompletionCandidates(String description, Class<?> type, Option opt) {
+        int idx = 0;
+        StringBuilder sb = new StringBuilder();
+
+        while (idx < description.length()) {
+            int start = description.indexOf("${COMPLETION-CANDIDATES", idx);
+            if (start == -1) {
+                sb.append(description.substring(idx));
+                break;
+            }
+
+            sb.append(description, idx, start);
+
+            int end = description.indexOf("}", start);
+            if (end == -1) {
+                sb.append(description.substring(start));
+                break;
+            }
+
+            String joiner = ", ";
+            int colonIdx = description.indexOf(":", start);
+            if (colonIdx != -1 && colonIdx < end) {
+                joiner = description.substring(colonIdx + 1, end)
+                    .replace("\\n", "\n").replace("\\t", "\t");
+            }
+
+            sb.append(FemtoCli.enumCandidates(type, opt, joiner));
+
+            idx = end + 1;
+        }
+
+        return sb.toString();
     }
 
     // (kept for backwards compatibility; no longer used for help output)

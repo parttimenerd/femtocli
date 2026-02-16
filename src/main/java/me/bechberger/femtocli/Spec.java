@@ -1,6 +1,7 @@
 package me.bechberger.femtocli;
 
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.util.List;
 
 /**
@@ -24,6 +25,9 @@ public final class Spec {
     public Object command() { return command; }
     public PrintStream out() { return out; }
     public PrintStream err() { return err; }
+
+    public PrintWriter outWriter() { return new PrintWriter(out, true); }
+    public PrintWriter errWriter() { return new PrintWriter(err, true); }
 
     /** The resolved command path for this execution. */
     public List<String> commandPath() { return commandPath; }

@@ -24,12 +24,14 @@ Features
 - Nested subcommands (classes and methods)
 - Multi-value options: arrays and `List` (repeat option or use `split` delimiter)
 - Built-in type conversion for primitive types, `Path`, `Duration`, enums, and support for custom converters
+- Enum descriptions: show descriptive text for enum values in help with `showEnumDescriptions = true`
 - Automatic `-h/--help` and `-V/--version` flags
 - End-of-options marker (`--`)
 - Description placeholders (`${DEFAULT-VALUE}`, `${COMPLETION-CANDIDATES}`)
 - Custom `header`, `customSynopsis`, and `footer` in help output
 - Ability to hide commands and options from help output
 - Support for "agent args" mode, like Java agents
+- Helpful error messages with "did you mean" suggestions for mistyped options
 
 Non-Goals
 ---------
@@ -995,6 +997,89 @@ Usage: enums [-hV] [--mode=<mode>]
 ```
 <!-- @femtocli:end -->
 
+### Enums with descriptions [(source)](examples/src/main/java/me/bechberger/femtocli/examples/EnumWithDescription.java)
+
+For enums with more complex values, you can provide descriptions by adding a `getDescription()` method
+and setting `showEnumDescriptions = true` in the `@Option` annotation.
+
+You can customize how enum values are separated in the help output using the joiner syntax:
+- `${COMPLETION-CANDIDATES}` or `${COMPLETION-CANDIDATES:, }` - comma-separated (default)
+- `${COMPLETION-CANDIDATES:\n}` - newline-separated with proper indentation
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/EnumWithDescription.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+
+@Command(name = "enumwithdesc")
+public class EnumWithDescription implements Runnable {
+
+    enum Mode {
+        FAST("fast", "optimized for speed"),
+        SAFE("safe", "optimized for safety");
+
+        private final String name;
+        private final String description;
+
+        Mode(String name, String description) {
+            this.name = name;
+            this.description = description;
+        }
+
+        public String getDescription() { return description; }
+
+        @Override
+        public String toString() { return name; }
+    }
+
+    @Option(names = "--mode", defaultValue = "safe",
+            description = "Mode: ${COMPLETION-CANDIDATES}, default: ${DEFAULT-VALUE}",
+            showEnumDescriptions = true)
+    Mode mode;
+
+    @Option(names = "--verbose-mode", defaultValue = "safe",
+            description = "Mode (verbose listing):\n${COMPLETION-CANDIDATES:\\n}, default: ${DEFAULT-VALUE}",
+            showEnumDescriptions = true)
+    Mode verboseMode;
+
+    public void run() {
+        System.out.println("Mode: " + mode + " (" + mode.getDescription() + ")");
+        System.out.println("Verbose Mode: " + verboseMode + " (" + verboseMode.getDescription() + ")");
+    }
+
+    public static void main(String[] args) {
+        FemtoCli.run(new EnumWithDescription(), args);
+    }
+}
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="EnumWithDescription" args=["--help"] -->
+```sh
+> ./examples/run.sh EnumWithDescription --help
+Usage: enumwithdesc [-hV] [--mode=<mode>] [--verbose-mode=<verboseMode>]
+  -h, --help                      Show this help message and exit.
+      --mode=<mode>               Mode: fast (optimized for speed), safe
+                                  (optimized for safety), default: safe
+  -V, --version                   Print version information and exit.
+      --verbose-mode=<verboseMode>
+                                  Mode (verbose listing):
+                                  fast (optimized for speed)
+                                  safe (optimized for safety), default: safe
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="EnumWithDescription" args=["--mode","fast"] -->
+```sh
+> ./examples/run.sh EnumWithDescription --mode fast
+Mode: fast (optimized for speed)
+Verbose Mode: safe (optimized for safety)
+```
+<!-- @femtocli:end -->
+
 ### Custom header, footer and synopsis [(source)](examples/src/main/java/me/bechberger/femtocli/examples/CustomHeaderAndSynopsis.java)
 
 Customize the help screen with a header and a fully custom synopsis.
@@ -1171,11 +1256,11 @@ public class CustomTypeVerifiers implements Runnable {
 <!-- @femtocli:run-java class="CustomTypeVerifiers" args=["--port","0"] -->
 ```sh
 > ./examples/run.sh CustomTypeVerifiers --port 0
+Error: port out of range
 Usage: verifiers [-hV] [--port=<port>]
   -h, --help       Show this help message and exit.
       --port=<port>
   -V, --version    Print version information and exit.
-Error: port out of range
 ```
 <!-- @femtocli:end -->
 
@@ -1212,6 +1297,105 @@ public class GlobalConfiguration implements Runnable {
 1.2.3
 ```
 <!-- @femtocli:end -->
+
+### "Did you mean" suggestions [(source)](examples/src/main/java/me/bechberger/femtocli/examples/DidYouMean.java)
+
+When users mistype option names, femtocli suggests similar valid options using Levenshtein distance.
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/DidYouMean.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+
+/**
+ * Demonstrates "did you mean" suggestions for mistyped options.
+ *
+ * <p>When you mistype an option name, femtocli suggests similar options.
+ */
+@Command(name = "didyoumean", description = "Example showing helpful error suggestions")
+public class DidYouMean implements Runnable {
+
+    @Option(names = "--input-file", description = "Input file to process")
+    String inputFile;
+
+    @Option(names = "--output-file", description = "Output file destination")
+    String outputFile;
+
+    @Option(names = "--verbose", description = "Enable verbose output")
+    boolean verbose;
+
+    @Override
+    public void run() {
+        System.out.println("Processing " + inputFile + " -> " + outputFile);
+        if (verbose) {
+            System.out.println("Verbose mode enabled");
+        }
+    }
+
+    public static void main(String[] args) {
+        System.exit(FemtoCli.run(new DidYouMean(), args));
+    }
+}
+```
+<!-- @femtocli:end -->
+
+Example with a typo using underscore instead of hyphen:
+
+<!-- @femtocli:run-java class="DidYouMean" args=["--input_file", "test.txt"] should_err="true" -->
+```sh
+> ./examples/run.sh DidYouMean --input_file test.txt
+Error: Unknown option: --input_file
+
+  tip: a similar argument exists: '--input-file'
+Usage: didyoumean [-hV] [--input-file=<inputFile>] [--output-file=<outputFile>]
+                  [--verbose]
+Example showing helpful error suggestions
+  -h, --help                    Show this help message and exit.
+      --input-file=<inputFile>  Input file to process
+      --output-file=<outputFile>
+                                Output file destination
+  -V, --version                 Print version information and exit.
+      --verbose                 Enable verbose output
+```
+<!-- @femtocli:end -->
+
+Example with an option that's wildly off (no similar suggestions):
+
+<!-- @femtocli:run-java class="DidYouMean" args=["--no-this-is-not-an-option", "test"] should_err="true" -->
+```sh
+> ./examples/run.sh DidYouMean --no-this-is-not-an-option test
+Error: Unknown option: --no-this-is-not-an-option
+
+Usage: didyoumean [-hV] [--input-file=<inputFile>] [--output-file=<outputFile>]
+                  [--verbose]
+Example showing helpful error suggestions
+  -h, --help                    Show this help message and exit.
+      --input-file=<inputFile>  Input file to process
+      --output-file=<outputFile>
+                                Output file destination
+  -V, --version                 Print version information and exit.
+      --verbose                 Enable verbose output
+```
+<!-- @femtocli:end -->
+
+You can disable this feature via `CommandConfig`:
+
+```java
+FemtoCli.builder()
+    .commandConfig(c -> c.suggestSimilarOptions = false)
+    .run(new DidYouMean(), args);
+```
+
+Or configure the suggestion string:
+
+```java
+FemtoCli.builder()
+    .commandConfig(c -> c.similarOptionSuggestion = "Did you mean: %s?")
+    .run(new DidYouMean(), args);
+```
 
 ### Boolean options with explicit values [(source)](examples/src/main/java/me/bechberger/femtocli/examples/BooleanExplicitValues.java)
 

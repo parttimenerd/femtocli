@@ -17,6 +17,10 @@ import java.lang.annotation.Target;
  *   <li>{@code ${DEFAULT-VALUE}} - replaced with the default value</li>
  *   <li>{@code ${COMPLETION-CANDIDATES}} - replaced with valid enum values (for enum types)</li>
  * </ul>
+ *
+ * <p>For enum types, if {@link #showEnumDescriptions()} is true, the {@code ${COMPLETION-CANDIDATES}}
+ * placeholder will include descriptions by calling {@code getDescription()} on each enum value.
+ * The enum must have a {@code getDescription()} method that returns a String.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.FIELD)
@@ -118,4 +122,14 @@ public @interface Option {
      * Useful for advanced or deprecated options.
      */
     boolean hidden() default false;
+
+    /**
+     * Whether to show descriptions for enum values in the {@code ${COMPLETION-CANDIDATES}} placeholder.
+     *
+     * <p>If true, the enum type must have a {@code getDescription()} method that returns a String.
+     * The placeholder will then be expanded to: {@code "value1 (description1), value2 (description2)"}.
+     *
+     * <p>If false (default), only enum names are shown: {@code "value1, value2"}.
+     */
+    boolean showEnumDescriptions() default false;
 }
