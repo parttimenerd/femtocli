@@ -1,6 +1,7 @@
 package me.bechberger.femtocli.examples;
 
 import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
 import me.bechberger.femtocli.annotations.Option;
 
 import java.nio.file.Path;
@@ -9,6 +10,7 @@ import java.util.List;
 /**
  * Demonstrates how to use multi-value options. The option value is split by a separator and stored in a list.
  */
+@Command(name = "multivalueoptions")
 public class MultiValueOptions implements Runnable {
     @Option(names = "-I", description = "Include dirs")
     List<Path> includeDirs; // -I a -I b

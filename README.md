@@ -1,3 +1,5 @@
+__Experimental build to use code generation and no reflection.__
+
 # femtocli
 
 [![CI](https://github.com/parttimenerd/femtocli/actions/workflows/ci.yml/badge.svg)](https://github.com/parttimenerd/femtocli/actions/workflows/ci.yml) [![Maven Central Version](https://img.shields.io/maven-central/v/me.bechberger.util/femtocli)](https://central.sonatype.com/artifact/me.bechberger.util/femtocli)

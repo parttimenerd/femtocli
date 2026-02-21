@@ -1,7 +1,9 @@
 package me.bechberger.femtocli.examples;
 
 import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
 
+@Command(name = "globalconfiguration")
 public class GlobalConfiguration implements Runnable {
 
     @Override

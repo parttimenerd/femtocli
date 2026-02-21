@@ -1,6 +1,7 @@
 package me.bechberger.femtocli.examples;
 
 import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
 import me.bechberger.femtocli.annotations.IgnoreOptions;
 import me.bechberger.femtocli.annotations.Mixin;
 import me.bechberger.femtocli.annotations.Option;
@@ -41,6 +42,7 @@ public class IgnoreOptionsExample {
      * - {@code --a} is inherited from {@link Base} but ignored here
      * - {@code --m} comes from the mixin but is ignored on the mixin class
      */
+    @Command(name = "cmd")
     @IgnoreOptions(exclude = "--a")
     static class Cmd extends Base {
         @Override

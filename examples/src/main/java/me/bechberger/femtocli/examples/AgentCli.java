@@ -34,7 +34,7 @@ public class AgentCli implements Runnable {
         System.out.println("Try: start,interval=1ms or stop,output=file.jfr,verbose");
     }
 
-    @Command(name = "start", description = "Start recording", mixinStandardHelpOptions = true)
+    @Command(name = "start", description = "Start recording", mixinStandardHelpOptions = true, agentMode = true)
     public static class Start implements Callable<Integer> {
 
         @Option(names = "--interval", defaultValue = "1ms", description = "Sampling interval")
@@ -47,7 +47,7 @@ public class AgentCli implements Runnable {
         }
     }
 
-    @Command(name = "stop", description = "Stop recording", mixinStandardHelpOptions = true)
+    @Command(name = "stop", description = "Stop recording", mixinStandardHelpOptions = true, agentMode = true)
     public static class Stop implements Callable<Integer> {
         @Parameters
         String mode;
