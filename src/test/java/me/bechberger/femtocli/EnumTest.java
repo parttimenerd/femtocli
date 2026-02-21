@@ -16,7 +16,7 @@ public class EnumTest {
 
     // ========== Example Classes ==========
 
-    @Command(name = "enumwithdesc")
+    @Command(name = "enumwithdesc", description = "Example of enum with descriptions")
     static class EnumWithDescriptionExample implements Runnable {
 
         enum Mode {
@@ -90,6 +90,7 @@ public class EnumTest {
         var res = FemtoCli.runCaptured(new EnumWithDescriptionExample(), "--help");
         assertEquals("""
                 Usage: enumwithdesc [-hV] [--mode=<mode>]
+                Example of enum with descriptions
                   -h, --help       Show this help message and exit.
                       --mode=<mode>
                                    Mode: fast (optimized for speed), safe (optimized for
