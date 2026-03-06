@@ -22,6 +22,7 @@ Features
 - Positional parameters via `@Parameters` (index, arity, paramLabel, defaultValue)
 - Mixins (reusable option groups) via `@Mixin`
 - Nested subcommands (classes and methods)
+- Default subcommand: automatically route to a subcommand when no subcommand name is given
 - Parent command access: subcommands can access ancestor commands and their parsed options via `Spec.getParent()`
 - Multi-value options: arrays and `List` (repeat option or use `split` delimiter)
 - Built-in type conversion for primitive types, `Path`, `Duration`, enums, and support for custom converters
@@ -235,6 +236,97 @@ public class SubcommandMethod implements Runnable {
 ```sh
 > ./examples/run.sh SubcommandMethod status
 OK
+```
+<!-- @femtocli:end -->
+
+### Default subcommand [(source)](examples/src/main/java/me/bechberger/femtocli/examples/DefaultSubcommand.java)
+
+Use `defaultSubcommand` to automatically route to a subcommand when the next argument
+isn't a recognised subcommand name. This is useful for tools where a "default action"
+makes sense – e.g. `app 1234` behaves like `app status 1234`.
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/DefaultSubcommand.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
+
+import java.util.concurrent.Callable;
+
+/**
+ * Example showing how to use {@code defaultSubcommand} to route unrecognised
+ * positional arguments (like a PID) to a specific subcommand automatically.
+ *
+ * <p>With this setup:
+ * <ul>
+ *   <li>{@code app 1234}         → behaves like {@code app status 1234}</li>
+ *   <li>{@code app status 1234}  → explicit, works as usual</li>
+ *   <li>{@code app list}         → routes to the list subcommand</li>
+ * </ul>
+ */
+@Command(name = "app",
+        description = "Example app with a default subcommand",
+        subcommands = {DefaultSubcommand.Status.class, DefaultSubcommand.ListCmd.class},
+        defaultSubcommand = DefaultSubcommand.Status.class,
+        mixinStandardHelpOptions = true)
+public class DefaultSubcommand implements Runnable {
+
+    @Command(name = "status", description = "Show status for a target")
+    static class Status implements Callable<Integer> {
+        @Parameters(description = "Target PID or name")
+        String target;
+
+        @Option(names = {"-v", "--verbose"}, description = "Verbose output")
+        boolean verbose;
+
+        @Override
+        public Integer call() {
+            System.out.println("Status of " + target + (verbose ? " (verbose)" : ""));
+            return 0;
+        }
+    }
+
+    @Command(name = "list", description = "List all targets")
+    static class ListCmd implements Runnable {
+        @Override
+        public void run() {
+            System.out.println("Listing all targets...");
+        }
+    }
+
+    @Override
+    public void run() {
+        System.out.println("Usage: app <command> [options]");
+    }
+
+    public static void main(String[] args) {
+        FemtoCli.run(new DefaultSubcommand(), args);
+    }
+}
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="DefaultSubcommand" args=["1234"] -->
+```sh
+> ./examples/run.sh DefaultSubcommand 1234
+Status of 1234
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="DefaultSubcommand" args=["status","1234","--verbose"] -->
+```sh
+> ./examples/run.sh DefaultSubcommand status 1234 --verbose
+Status of 1234 (verbose)
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="DefaultSubcommand" args=["list"] -->
+```sh
+> ./examples/run.sh DefaultSubcommand list
+Listing all targets...
 ```
 <!-- @femtocli:end -->
 

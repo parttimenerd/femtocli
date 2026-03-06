@@ -54,6 +54,30 @@ public @interface Command {
 
     Class<?>[] subcommands() default {};
 
+    /**
+     * Default subcommand class to route to when the next token on the command line
+     * is not a recognised subcommand name.
+     *
+     * <p>When set, and the parser encounters a positional argument where it expects a
+     * subcommand, it will silently route to the specified subcommand <em>without</em>
+     * consuming the token – so the token is still available as a positional argument
+     * for the default subcommand.
+     *
+     * <p>The class must also appear in {@link #subcommands()} and must carry its own
+     * {@code @Command} annotation. {@code void.class} (the default) means no default
+     * subcommand.
+     *
+     * <p>Example:
+     * <pre>{@code
+     * @Command(name = "app",
+     *          subcommands = {StatusCmd.class, ListCmd.class},
+     *          defaultSubcommand = StatusCmd.class)
+     * class App implements Runnable { ... }
+     * }</pre>
+     * With this, {@code app 1234} behaves like {@code app status 1234}.
+     */
+    Class<?> defaultSubcommand() default void.class;
+
     boolean mixinStandardHelpOptions() default false;
 
     /**

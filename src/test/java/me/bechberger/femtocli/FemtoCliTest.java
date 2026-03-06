@@ -2401,4 +2401,98 @@ class FemtoCliTest {
         assertThrows(FieldIsFinalException.class, () -> FemtoCli.builder()
                 .runCaptured(new FinalFieldCmd(), "--final-opt", "newValue"));
     }
+
+    // ========== Default subcommand tests ==========
+
+    @Command(name = "status", description = "Show status")
+    static class DefStatus implements Callable<Integer> {
+        @Parameters(description = "target")
+        String target;
+
+        @Override
+        public Integer call() {
+            System.out.println("status:" + target);
+            return 0;
+        }
+    }
+
+    @Command(name = "list", description = "List items")
+    static class DefList implements Runnable {
+        @Override
+        public void run() {
+            System.out.println("list");
+        }
+    }
+
+    @Command(
+            name = "myapp",
+            subcommands = {DefStatus.class, DefList.class},
+            defaultSubcommand = DefStatus.class,
+            mixinStandardHelpOptions = true
+    )
+    static class DefaultSubRoot implements Runnable {
+        @Option(names = {"-v", "--verbose"})
+        boolean verbose;
+
+        @Override
+        public void run() {
+            System.out.println("root");
+        }
+    }
+
+    @Test
+    void defaultSubcommandRoutesUnknownTokenToDefaultSub() {
+        // "myapp 1234" should behave like "myapp status 1234"
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root, "1234");
+        assertEquals(0, res.exitCode(), res.err());
+        assertThat(res.out().trim()).isEqualTo("status:1234");
+    }
+
+    @Test
+    void defaultSubcommandExplicitSubcommandStillWorks() {
+        // "myapp list" should still route to list, not to status with "list" as positional
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root, "list");
+        assertEquals(0, res.exitCode(), res.err());
+        assertThat(res.out().trim()).isEqualTo("list");
+    }
+
+    @Test
+    void defaultSubcommandExplicitStatusStillWorks() {
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root, "status", "5678");
+        assertEquals(0, res.exitCode(), res.err());
+        assertThat(res.out().trim()).isEqualTo("status:5678");
+    }
+
+    @Test
+    void defaultSubcommandWithParentOptionsParsed() {
+        // "myapp --verbose 1234" should parse --verbose on root, then route to status
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root, "--verbose", "1234");
+        assertEquals(0, res.exitCode(), res.err());
+        assertThat(root.verbose).isTrue();
+        assertThat(res.out().trim()).isEqualTo("status:1234");
+    }
+
+    @Test
+    void defaultSubcommandHelpStillWorks() {
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root, "--help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Commands:");
+        assertThat(res.out()).contains("status");
+        assertThat(res.out()).contains("list");
+    }
+
+    @Test
+    void defaultSubcommandNoArgsInvokesRoot() {
+        // "myapp" with no args should invoke the root run(), not the default sub
+        var root = new DefaultSubRoot();
+        RunResult res = FemtoCli.builder().runCaptured(root);
+        assertEquals(0, res.exitCode(), res.err());
+        assertThat(res.out().trim()).isEqualTo("root");
+    }
+
 }

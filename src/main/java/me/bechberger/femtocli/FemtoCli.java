@@ -227,7 +227,18 @@ public final class FemtoCli {
                     return invokeSubcommandMethod(cmd, method, tokens, converters);
                 }
 
-                // No subcommand found - this is the final command
+                // No subcommand found – check for a default subcommand
+                Command cmdAnn = cmd.getClass().getAnnotation(Command.class);
+                Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
+                if (defaultSub != void.class) {
+                    // Do NOT consume the token – it becomes a positional for the default subcommand
+                    var ctor = defaultSub.getDeclaredConstructor();
+                    ctor.setAccessible(true);
+                    commandChain.add(cmd);
+                    cmd = ctor.newInstance();
+                    commandPath.add(commandName(cmd));
+                    continue;
+                }
                 break;
             }
 
