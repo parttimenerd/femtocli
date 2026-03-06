@@ -6,7 +6,7 @@
 
     <groupId>me.bechberger.util</groupId>
     <artifactId>femtocli-examples</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
 
     <name>femtocli examples</name>
 
