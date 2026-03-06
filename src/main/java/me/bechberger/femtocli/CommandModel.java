@@ -17,6 +17,8 @@ final class CommandModel {
     final Map<Field, FemtoCli.OptionMeta> optionByField;
     final List<FemtoCli.OptionMeta> options;
     final List<FemtoCli.ParamInfo> parameters;
+    /** Populated by FemtoCli.parseOptions() for later required-option validation. */
+    Set<Field> seenFields;
 
     private CommandModel(Object cmd,
                          Map<String, FemtoCli.OptionMeta> optionsByName,
@@ -31,7 +33,6 @@ final class CommandModel {
     }
 
     private static void initializeMixins(Object cmd) throws Exception {
-        // Initialize mixins (same behavior as before)
         for (Field field : FemtoCli.allFields(cmd.getClass())) {
             if (field.getAnnotation(Mixin.class) != null) {
                 if (Modifier.isStatic(field.getModifiers())) {
@@ -161,7 +162,6 @@ final class CommandModel {
     static CommandModel of(Object cmd) throws Exception {
         initializeMixins(cmd);
 
-        // Spec fields are initialized by FemtoCli once it knows the runtime streams.
 
         Map<String, FemtoCli.OptionMeta> optionsByName = new LinkedHashMap<>();
         Map<Field, FemtoCli.OptionMeta> optionByField = new LinkedHashMap<>();

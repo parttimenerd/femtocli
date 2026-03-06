@@ -49,22 +49,11 @@ public final class FemtoCli {
         }
 
         public int run(Object root, PrintStream out, PrintStream err, String... args) {
-            return FemtoCli.execute(root, out, err, args, converters, commandConfig);
+            return FemtoCli.execute(root, out, err, args, converters, commandConfig, false);
         }
 
         public RunResult runCaptured(Object root, String... args) {
-            ByteArrayOutputStream outStream = new ByteArrayOutputStream();
-            ByteArrayOutputStream errStream = new ByteArrayOutputStream();
-            PrintStream out = new PrintStream(outStream);
-            PrintStream err = new PrintStream(errStream);
-            PrintStream oldOut = System.out;
-            PrintStream oldErr = System.err;
-            System.setOut(out);
-            System.setErr(err);
-            int exitCode = FemtoCli.execute(root, out, err, args, converters, commandConfig);
-            System.setOut(oldOut);
-            System.setErr(oldErr);
-            return new RunResult(outStream.toString(), errStream.toString(), exitCode);
+            return captureRun((out, err) -> FemtoCli.execute(root, out, err, args, converters, commandConfig, false));
         }
     }
 
@@ -110,6 +99,10 @@ public final class FemtoCli {
     }
 
     public static RunResult runAgentCaptured(Object root, String agentArgs) {
+        return captureRun((out, err) -> runAgent(root, out, err, agentArgs));
+    }
+
+    private static RunResult captureRun(java.util.function.BiFunction<PrintStream, PrintStream, Integer> runner) {
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         ByteArrayOutputStream errStream = new ByteArrayOutputStream();
         PrintStream out = new PrintStream(outStream);
@@ -118,16 +111,10 @@ public final class FemtoCli {
         PrintStream oldErr = System.err;
         System.setOut(out);
         System.setErr(err);
-        int exitCode = runAgent(root, out, err, agentArgs);
+        int exitCode = runner.apply(out, err);
         System.setOut(oldOut);
         System.setErr(oldErr);
         return new RunResult(outStream.toString(), errStream.toString(), exitCode);
-    }
-
-    private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
-                               Map<Class<?>, TypeConverter<?>> converters,
-                               CommandConfig commandConfig) {
-        return execute(root, out, err, args, converters, commandConfig, false);
     }
 
     private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
@@ -148,23 +135,8 @@ public final class FemtoCli {
             // Process commands and their options in sequence
             while (true) {
                 // Check for help/version at current level
-                if (!tokens.isEmpty()) {
-                    String next = tokens.peekFirst();
-                    if (agentMode) {
-                        next = normalizeBareHelpOrVersionToken(next);
-                    }
-
-                    if (isHelp(next)) {
-                        USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
-                        usage(cmd, out);
-                        return commandConfig.helpExitCode;
-                    }
-                    if (isVersion(next)) {
-                        USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
-                        version(root, out);
-                        return 0;
-                    }
-                }
+                int hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
+                if (hvResult >= 0) return hvResult;
 
                 // If the current command has no subcommands, it's the final command
                 if (!hasSubcommands(cmd.getClass())) {
@@ -177,40 +149,28 @@ public final class FemtoCli {
                 if (agentMode) {
                     normalizeBareOptionTokens(cmd, tokens, model);
                 }
-                parseOptionsBeforeSubcommand(cmd, tokens, converters);
+                parseOptions(model, cmd, tokens, converters,
+                        (USAGE_CONTEXT.get() != null ? USAGE_CONTEXT.get().commandConfig : commandConfig), true);
 
                 // After parsing options, check if there's a subcommand
                 if (tokens.isEmpty()) {
                     // No subcommand given - fall through to invoke this command
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+                    setUsageCtx(commandPath, commandConfig, agentMode);
                     return invoke(cmd);
                 }
 
-                String next = tokens.peekFirst();
-                if (agentMode) {
-                    next = normalizeBareHelpOrVersionToken(next);
-                }
-
                 // Check for help/version again after parsing options
-                if (isHelp(next)) {
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
-                    usage(cmd, out);
-                    return commandConfig.helpExitCode;
-                }
-                if (isVersion(next)) {
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
-                    version(root, out);
-                    return 0;
-                }
+                hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
+                if (hvResult >= 0) return hvResult;
+
+                String next = peekNormalized(tokens, agentMode);
 
                 // Check for subcommand class
                 Class<?> sub = findSubcommand(cmd.getClass(), next);
                 if (sub != null) {
                     tokens.removeFirst();
-                    var ctor = sub.getDeclaredConstructor();
-                    ctor.setAccessible(true);
                     commandChain.add(cmd);
-                    cmd = ctor.newInstance();
+                    cmd = instantiateSubcommand(sub);
                     commandPath.add(commandName(cmd));
                     continue; // Process next level
                 }
@@ -223,7 +183,7 @@ public final class FemtoCli {
                     if (mc != null && !mc.name().isBlank()) {
                         commandPath.add(mc.name());
                     }
-                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+                    setUsageCtx(commandPath, commandConfig, agentMode);
                     return invokeSubcommandMethod(cmd, method, tokens, converters);
                 }
 
@@ -232,10 +192,8 @@ public final class FemtoCli {
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
                 if (defaultSub != void.class) {
                     // Do NOT consume the token – it becomes a positional for the default subcommand
-                    var ctor = defaultSub.getDeclaredConstructor();
-                    ctor.setAccessible(true);
                     commandChain.add(cmd);
-                    cmd = ctor.newInstance();
+                    cmd = instantiateSubcommand(defaultSub);
                     commandPath.add(commandName(cmd));
                     continue;
                 }
@@ -243,7 +201,7 @@ public final class FemtoCli {
             }
 
             // Final command: full parsing (options + positionals + required validation)
-            USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+            setUsageCtx(commandPath, commandConfig, agentMode);
 
             CommandModel model = CommandModel.of(cmd);
             injectSpec(model, out, err, List.copyOf(commandPath), commandConfig, List.copyOf(commandChain));
@@ -286,22 +244,10 @@ public final class FemtoCli {
         }
     }
 
-    /**
-     * Allow "bare" option names without leading dashes (useful for agent-args or restricted environments).
-     * <p>
-     * Example: "req=x" is normalized to "--req=x" if "--req" is a known option for the current command.
-     * If multiple options match, we fail early with a helpful error.
-     */
     private static void normalizeBareOptionTokens(Object cmdForErrors, Deque<String> tokens, CommandModel model) throws UsageEx {
-        if (tokens.isEmpty() || model == null) {
-            return;
-        }
-        // Copy to allow in-place update
+        if (tokens.isEmpty() || model == null) return;
         List<String> normalized = new ArrayList<>(tokens.size());
-        for (String t : tokens) {
-            String nt = normalizeBareOptionToken(cmdForErrors, t, model);
-            normalized.add(nt);
-        }
+        for (String t : tokens) normalized.add(normalizeBareOptionToken(cmdForErrors, t, model));
         tokens.clear();
         tokens.addAll(normalized);
     }
@@ -328,7 +274,7 @@ public final class FemtoCli {
         // Support bare boolean flags without '=' in agent mode, if unambiguous and boolean.
         // Example: "flag" is normalized to "--flag" if --flag is a known boolean option.
         if (!token.contains("=")) {
-            List<String> candidates = getCandidates(token, model);
+            List<String> candidates = getCandidates(model, token, true);
             if (candidates.size() == 1) {
                 return candidates.get(0);
             }
@@ -341,15 +287,12 @@ public final class FemtoCli {
 
         // Only treat tokens containing '=' as potential bare options to avoid interfering with positionals/subcommands.
         int eq = token.indexOf('=');
-        if (eq < 0) {
-            return token;
-        }
         String bareName = token.substring(0, eq);
         if (bareName.isBlank()) {
             return token;
         }
 
-        List<String> candidates = getCandidates(model, bareName);
+        List<String> candidates = getCandidates(model, bareName, false);
 
         if (candidates.isEmpty()) {
             return token;
@@ -376,21 +319,11 @@ public final class FemtoCli {
         return candidates.get(0) + token.substring(eq);
     }
 
-    private static List<String> getCandidates(String token, CommandModel model) {
-        // Boolean-only candidates (used for bare boolean flag normalization)
-        return getCandidates(model, token, true);
-    }
-
-    private static List<String> getCandidates(CommandModel model, String bareName) {
-        // Any option candidates (used for bare-name-with-"=" normalization)
-        return getCandidates(model, bareName, false);
-    }
-
     private static List<String> getCandidates(CommandModel model, String bareName, boolean requireBoolean) {
         List<String> candidates = new ArrayList<>();
         for (var e : model.optionsByName.entrySet()) {
             String optName = e.getKey();
-            if (!(optName.startsWith("--") || (optName.startsWith("-") && !optName.startsWith("--")))) {
+            if (!optName.startsWith("-")) {
                 continue;
             }
 
@@ -418,12 +351,38 @@ public final class FemtoCli {
         return c == boolean.class || c == Boolean.class;
     }
 
-    private static boolean looksLikeExplicitBooleanValue(String s) {
-        return ("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s));
-    }
-
     private static boolean isHelp(String t) { return "--help".equals(t) || "-h".equals(t); }
     private static boolean isVersion(String t) { return "--version".equals(t) || "-V".equals(t); }
+
+    private static String peekNormalized(Deque<String> tokens, boolean agentMode) {
+        if (tokens.isEmpty()) return null;
+        String next = tokens.peekFirst();
+        return agentMode ? normalizeBareHelpOrVersionToken(next) : next;
+    }
+
+    private static int checkHelpVersion(Deque<String> tokens, boolean agentMode,
+                                            Object cmd, Object root, PrintStream out,
+                                            List<String> commandPath, CommandConfig commandConfig) {
+        String next = peekNormalized(tokens, agentMode);
+        if (next == null) return -1;
+        if (isHelp(next)) {
+            setUsageCtx(commandPath, commandConfig, agentMode);
+            usage(cmd, out);
+            return commandConfig.helpExitCode;
+        }
+        if (isVersion(next)) {
+            setUsageCtx(commandPath, commandConfig, agentMode);
+            version(root, out);
+            return 0;
+        }
+        return -1;
+    }
+
+    private static Object instantiateSubcommand(Class<?> sub) throws Exception {
+        var ctor = sub.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return ctor.newInstance();
+    }
 
     /**
      * Use {@link Spec#usage()} instead
@@ -436,10 +395,6 @@ public final class FemtoCli {
             return;
         }
         usage(cmd, List.of(commandName(cmd)), new CommandConfig(), out, false);
-    }
-
-    public static void usage(Object cmd, List<String> commandPath, CommandConfig commandConfig, PrintStream out) {
-        usage(cmd, commandPath, commandConfig, out, false);
     }
 
     static void usage(Object cmd, List<String> commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
@@ -456,12 +411,30 @@ public final class FemtoCli {
     private static void parseInto(Object cmd, Deque<String> tokens,
                                   Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         var model = CommandModel.of(cmd);
-        injectSpecFromContext(model);
-
         UsageContext ctx = USAGE_CONTEXT.get();
+        if (ctx != null) {
+            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig, List.of());
+        } else {
+            injectSpec(model, System.out, System.err, List.of(commandName(model.cmd)), new CommandConfig(), List.of());
+        }
         CommandConfig config = ctx != null ? ctx.commandConfig : new CommandConfig();
 
-        // Parse tokens
+        List<String> positionals = parseOptions(model, cmd, tokens, converters, config, false);
+
+        // Bind positionals based on index/arity
+        bindPositionals(cmd, positionals, model.parameters, converters);
+
+        // Validate required options
+        validateRequiredOptions(cmd, model.options, model.seenFields);
+    }
+
+    /**
+     * Shared option-parsing loop. When stopAtNonOption is true, stops at first non-option
+     * token and leaves it in the queue.
+     */
+    private static List<String> parseOptions(CommandModel model, Object cmd, Deque<String> tokens,
+                                             Map<Class<?>, TypeConverter<?>> converters,
+                                             CommandConfig config, boolean stopAtNonOption) throws Exception {
         Set<Field> seenFields = new HashSet<>();
         Set<Field> seenFieldsWithoutValue = new HashSet<>();
         Map<Field, List<String>> multiValueFields = new HashMap<>();
@@ -469,15 +442,24 @@ public final class FemtoCli {
         boolean acceptOptions = true;
 
         while (!tokens.isEmpty()) {
-            String token = tokens.removeFirst();
-            throwIfHelpOrVersion(cmd, token);
+            String token = stopAtNonOption ? tokens.peekFirst() : tokens.removeFirst();
+
+            if (!stopAtNonOption) {
+                if (isHelp(token)) throw UsageEx.help(cmd);
+                if (isVersion(token)) throw UsageEx.version();
+            }
+
             if (acceptOptions && "--".equals(token)) {
+                if (stopAtNonOption) tokens.removeFirst();
                 acceptOptions = false;
                 continue;
             }
 
             if (acceptOptions && token.startsWith("-")) {
+                if (stopAtNonOption) tokens.removeFirst();
                 parseOption(model, cmd, token, tokens, seenFields, seenFieldsWithoutValue, multiValueFields, converters, config);
+            } else if (stopAtNonOption) {
+                break;
             } else {
                 positionals.add(token);
             }
@@ -489,108 +471,39 @@ public final class FemtoCli {
         // Apply default values for unseen options
         applyDefaultValues(model, seenFields, seenFieldsWithoutValue, converters);
 
-        // Bind positionals based on index/arity
-        bindPositionals(cmd, positionals, model.parameters, converters);
+        // Store seenFields on model for later required-option validation
+        model.seenFields = seenFields;
 
-        // Validate required options
-        validateRequiredOptions(cmd, model.options, seenFields);
-    }
-
-    /**
-     * Parse only options (not positionals) before encountering a subcommand.
-     * Stops at the first non-option token and leaves it in the queue.
-     */
-    private static void parseOptionsBeforeSubcommand(Object cmd, Deque<String> tokens,
-                                                     Map<Class<?>, TypeConverter<?>> converters) throws Exception {
-        var model = CommandModel.of(cmd);
-
-        UsageContext ctx = USAGE_CONTEXT.get();
-        CommandConfig config = ctx != null ? ctx.commandConfig : new CommandConfig();
-
-        Set<Field> seenFields = new HashSet<>();
-        Set<Field> seenFieldsWithoutValue = new HashSet<>();
-        Map<Field, List<String>> multiValueFields = new HashMap<>();
-        boolean acceptOptions = true;
-
-        while (!tokens.isEmpty()) {
-            String token = tokens.peekFirst(); // Peek, don't remove yet
-
-            if (acceptOptions && "--".equals(token)) {
-                tokens.removeFirst();
-                acceptOptions = false;
-                continue;
-            }
-
-            if (acceptOptions && token.startsWith("-")) {
-                tokens.removeFirst(); // Now remove it
-                parseOption(model, cmd, token, tokens, seenFields, seenFieldsWithoutValue, multiValueFields, converters, config);
-            } else {
-                // Hit a non-option token (likely subcommand or positional), stop parsing
-                break;
-            }
-        }
-
-        // Apply multi-value fields
-        applyMultiValueFields(model, multiValueFields, converters);
-
-        // Apply default values for unseen options
-        applyDefaultValues(model, seenFields, seenFieldsWithoutValue, converters);
-
-        // Don't bind positionals or validate required options here - that happens for the final command
-    }
-    private static void throwIfHelpOrVersion(Object cmd, String token) throws UsageEx {
-        if (isHelp(token)) {
-            throw UsageEx.help(cmd);
-        }
-        if (isVersion(token)) {
-            throw UsageEx.version();
-        }
-    }
-
-    private static void injectSpecFromContext(CommandModel model) throws Exception {
-        UsageContext ctx = USAGE_CONTEXT.get();
-        if (ctx != null) {
-            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig, List.of());
-        } else {
-            injectSpec(model, System.out, System.err, List.of(commandName(model.cmd)), new CommandConfig(), List.of());
-        }
+        return positionals;
     }
 
     private static Object invokeConverterMethod(String spec, Object cmd, String raw, Class<?> targetType) throws Exception {
         Method m = resolveMethod(spec, cmd != null ? cmd.getClass() : null);
-        Object receiver = methodReceiverOrThrow(m, cmd, "Converter", spec);
-
-        // Expect single String parameter
         if (m.getParameterCount() != 1 || m.getParameterTypes()[0] != String.class) {
             throw new IllegalArgumentException("Converter method must take a single String argument: " + spec);
         }
-        m.setAccessible(true);
-        Object result = m.invoke(receiver, raw);
+        Object result = invokeResolvedMethod(m, cmd, "Converter", spec, raw);
         if (result == null) return null;
-        if (targetType.isInstance(result)) return result;
-        if (isPrimitiveWrapperAssignable(targetType, result.getClass())) return result;
+        if (targetType.isInstance(result) || isPrimitiveWrapperAssignable(targetType, result.getClass())) return result;
         throw new IllegalArgumentException("Converter method returned incompatible type for " + spec);
-    }
-
-    private static Object methodReceiverOrThrow(Method m, Object instance, String kind, String spec) {
-        boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
-        if (isStatic) {
-            return null;
-        }
-        if (instance == null) {
-            throw new IllegalArgumentException(kind + " method requires a command instance: " + spec);
-        }
-        return instance;
     }
 
     private static void invokeSingleArgMethod(String spec, Object cmdForErrors, Object value) throws Exception {
         Method m = resolveMethod(spec, cmdForErrors != null ? cmdForErrors.getClass() : null);
-        Object receiver = methodReceiverOrThrow(m, cmdForErrors, "Verifier", spec);
         if (m.getParameterCount() != 1) {
             throw new IllegalArgumentException("Verifier method must take a single argument: " + spec);
         }
+        invokeResolvedMethod(m, cmdForErrors, "Verifier", spec, value);
+    }
+
+    private static Object invokeResolvedMethod(Method m, Object instance, String kind, String spec, Object arg) throws Exception {
+        boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
+        Object receiver = isStatic ? null : instance;
+        if (!isStatic && instance == null) {
+            throw new IllegalArgumentException(kind + " method requires a command instance: " + spec);
+        }
         m.setAccessible(true);
-        m.invoke(receiver, value);
+        return m.invoke(receiver, arg);
     }
 
     private static void runVerifiers(Object cmdForErrors, Object value, Option opt, Parameters param) throws UsageEx {
@@ -655,18 +568,14 @@ public final class FemtoCli {
 
         // If no explicit value is provided (no "=...")
         if (value == null) {
-            // Determine whether this boolean option should be treated as a simple flag (presence => true)
-            // or whether it requires an explicit value. If the option has a per-option converter (converter
-            // class or converterMethod) or a converter was registered for this type, we must require a value
-            // so that the converter receives the raw token (e.g. "on"/"off"). Only when no converter is
-            // present do we preserve the old "flag" behavior for booleans.
+            // Check whether boolean should be flag vs requiring explicit value (when converter is present)
             boolean hasPerOptionConverter = opt != null && (!opt.converterMethod().isBlank() || opt.converter() != TypeConverter.NullTypeConverter.class);
             boolean hasRegisteredConverter = converters != null && converters.containsKey(type);
             boolean treatBooleanAsFlag = isBoolean && !hasPerOptionConverter && !hasRegisteredConverter;
 
-            // Boolean flags: presence means true, but allow an explicit boolean value as the next token.
+            // Boolean flags: presence means true, allow explicit boolean value as next token.
             if (treatBooleanAsFlag) {
-                if (!tokens.isEmpty() && looksLikeExplicitBooleanValue(tokens.peekFirst())) {
+                if (!tokens.isEmpty() && ("true".equalsIgnoreCase(tokens.peekFirst()) || "false".equalsIgnoreCase(tokens.peekFirst()))) {
                     value = tokens.removeFirst();
                 } else {
                     optMeta.field.set(optMeta.target, true);
@@ -674,9 +583,8 @@ public final class FemtoCli {
                 }
             }
 
-            // Optional-value option: allow "--opt" without a value
+            // Optional-value option
             if (value == null && opt != null && "0..1".equals(opt.arity())) {
-                // Mark as seen, but remember that no explicit value was provided.
                 seenFieldsWithoutValue.add(optMeta.field);
                 return;
             }
@@ -719,25 +627,35 @@ public final class FemtoCli {
             Class<?> type = field.getType();
 
             if (type.isArray()) {
-                Class<?> componentType = type.getComponentType();
-                Object array = Array.newInstance(componentType, values.size());
-                for (int i = 0; i < values.size(); i++) {
-                    Object converted = convert(values.get(i), componentType, field.getName(), opt, converters, model.cmd);
-                    runVerifiers(model.cmd, converted, opt, null);
-                    Array.set(array, i, converted);
-                }
-                field.set(target, array);
+                field.set(target, convertToArray(values, type.getComponentType(), field.getName(), opt, null, converters, model.cmd));
             } else {
-                // For lists we keep raw strings converted by caller's registered converters when binding positionals or options
-                List<Object> list = new ArrayList<>();
-                for (String v : values) {
-                    Object converted = convert(v, String.class, field.getName(), opt, converters, model.cmd);
-                    runVerifiers(model.cmd, converted, opt, null);
-                    list.add(converted);
-                }
-                field.set(target, list);
+                field.set(target, convertToList(values, field.getName(), opt, null, converters, model.cmd));
             }
         }
+    }
+
+    private static Object convertToArray(List<String> values, Class<?> componentType, String fieldName,
+                                         Option opt, Parameters param,
+                                         Map<Class<?>, TypeConverter<?>> converters, Object cmd) throws Exception {
+        Object array = Array.newInstance(componentType, values.size());
+        for (int i = 0; i < values.size(); i++) {
+            Object converted = convert(values.get(i), componentType, fieldName, opt, converters, cmd);
+            runVerifiers(cmd, converted, opt, param);
+            Array.set(array, i, converted);
+        }
+        return array;
+    }
+
+    private static List<Object> convertToList(List<String> values, String fieldName,
+                                              Option opt, Parameters param,
+                                              Map<Class<?>, TypeConverter<?>> converters, Object cmd) throws Exception {
+        List<Object> list = new ArrayList<>();
+        for (String v : values) {
+            Object converted = convert(v, String.class, fieldName, opt, converters, cmd);
+            runVerifiers(cmd, converted, opt, param);
+            list.add(converted);
+        }
+        return list;
     }
 
     private static void applyDefaultValues(CommandModel model,
@@ -774,7 +692,6 @@ public final class FemtoCli {
         return opt.names()[0];
     }
 
-    /** Parse range like "0", "0..1", "0..*", "2..*" into [start, end] where -1 means unbounded. */
     static int[] parseRange(String range) {
         if (range == null || range.isEmpty()) return new int[]{-2, -2}; // marker for "not specified"
         if (range.contains("..")) {
@@ -786,8 +703,6 @@ public final class FemtoCli {
         int idx = Integer.parseInt(range);
         return new int[]{idx, idx};
     }
-
-    /* internal structs (single definitions) */
 
     static final class ParamInfo {
         final Field field;
@@ -815,16 +730,6 @@ public final class FemtoCli {
         }
     }
 
-    private static final class ArityBounds {
-        final int min;
-        final int max;
-
-        ArityBounds(int min, int max) {
-            this.min = min;
-            this.max = max;
-        }
-    }
-
     private static void bindPositionals(Object cmd, List<String> positionals, List<ParamInfo> paramInfos,
                                         Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         if (paramInfos.isEmpty()) {
@@ -845,7 +750,7 @@ public final class FemtoCli {
                                 || List.class.isAssignableFrom(field.getType())
                                 || field.getType().isArray();
 
-            ArityBounds arity = determineArity(paramInfo, isVarargs);
+            int[] arity = determineArity(paramInfo, isVarargs);
 
             if (isVarargs) {
                 currentIndex = bindVarargsParam(cmd, field, positionals, currentIndex, arity, paramInfo, converters);
@@ -867,49 +772,31 @@ public final class FemtoCli {
         }
     }
 
-    private static ArityBounds determineArity(ParamInfo paramInfo, boolean isVarargs) {
+    private static int[] determineArity(ParamInfo paramInfo, boolean isVarargs) {
         int[] arityRange = paramInfo.arityRange;
 
         if (arityRange[0] == -2) {
-            // Arity not specified - infer from type
-            return isVarargs
-                    ? new ArityBounds(0, Integer.MAX_VALUE)
-                    : new ArityBounds(1, 1);
+            return isVarargs ? new int[]{0, Integer.MAX_VALUE} : new int[]{1, 1};
         }
 
-        int minArity = arityRange[0];
-        int maxArity = arityRange[1] == -1 ? Integer.MAX_VALUE : arityRange[1];
-        return new ArityBounds(minArity, maxArity);
+        return new int[]{arityRange[0], arityRange[1] == -1 ? Integer.MAX_VALUE : arityRange[1]};
     }
 
     private static int bindVarargsParam(Object cmd, Field field, List<String> positionals,
-                                        int startIndex, ArityBounds arity, ParamInfo paramInfo,
+                                        int startIndex, int[] arity, ParamInfo paramInfo,
                                         Map<Class<?>, TypeConverter<?>> converters) throws Exception {
         int available = positionals.size() - startIndex;
-        int toConsume = Math.min(available, arity.max);
+        int toConsume = Math.min(available, arity[1]);
         List<String> values = positionals.subList(startIndex, startIndex + toConsume);
 
-        if (values.size() < arity.min) {
+        if (values.size() < arity[0]) {
             throw new UsageEx(cmd, "Missing required parameter: " + getParamLabel(paramInfo));
         }
 
         if (field.getType().isArray()) {
-            Class<?> componentType = field.getType().getComponentType();
-            Object array = Array.newInstance(componentType, values.size());
-            for (int i = 0; i < values.size(); i++) {
-                Object converted = convert(values.get(i), componentType, field.getName(), null, converters, cmd);
-                runVerifiers(cmd, converted, null, paramInfo.param);
-                Array.set(array, i, converted);
-            }
-            field.set(cmd, array);
+            field.set(cmd, convertToArray(values, field.getType().getComponentType(), field.getName(), null, paramInfo.param, converters, cmd));
         } else if (List.class.isAssignableFrom(field.getType())) {
-            List<Object> list = new ArrayList<>();
-            for (String v : values) {
-                Object converted = convert(v, String.class, field.getName(), null, converters, cmd);
-                runVerifiers(cmd, converted, null, paramInfo.param);
-                list.add(converted);
-            }
-            field.set(cmd, list);
+            field.set(cmd, convertToList(values, field.getName(), null, paramInfo.param, converters, cmd));
         } else if (!values.isEmpty()) {
             Object converted = convert(values.get(0), field.getType(), field.getName(), null, converters, cmd);
             runVerifiers(cmd, converted, null, paramInfo.param);
@@ -921,9 +808,9 @@ public final class FemtoCli {
 
     private static int bindSingleParam(Object cmd, Field field, Parameters param,
                                        List<String> positionals, int currentIndex,
-                                       ArityBounds arity, ParamInfo paramInfo,
+                                       int[] arity, ParamInfo paramInfo,
                                        Map<Class<?>, TypeConverter<?>> converters) throws Exception {
-        boolean isOptional = arity.min == 0 || "0..1".equals(param.arity());
+        boolean isOptional = arity[0] == 0 || "0..1".equals(param.arity());
 
         if (currentIndex < positionals.size()) {
             String value = positionals.get(currentIndex);
@@ -950,32 +837,25 @@ public final class FemtoCli {
         return pi.param.paramLabel().isEmpty() ? "<" + pi.field.getName() + ">" : pi.param.paramLabel();
     }
 
-    // Collecting fields/params is now centralized in CommandModel
-
-    /* Builtins (static initializer to avoid Map.ofEntries bootstrap) */
+    /* Builtins */
     private static final Map<Class<?>, TypeConverter<?>> BUILTIN_CONVERTERS;
     static {
         Map<Class<?>, TypeConverter<?>> m = new HashMap<>();
         m.put(String.class, (TypeConverter<String>) s -> s);
-        m.put(int.class, (TypeConverter<Integer>) Integer::parseInt);
-        m.put(Integer.class, (TypeConverter<Integer>) Integer::parseInt);
-        m.put(long.class, (TypeConverter<Long>) Long::parseLong);
-        m.put(Long.class, (TypeConverter<Long>) Long::parseLong);
-        m.put(double.class, (TypeConverter<Double>) Double::parseDouble);
-        m.put(Double.class, (TypeConverter<Double>) Double::parseDouble);
-        m.put(float.class, (TypeConverter<Float>) Float::parseFloat);
-        m.put(Float.class, (TypeConverter<Float>) Float::parseFloat);
-        m.put(boolean.class, (TypeConverter<Boolean>) Boolean::parseBoolean);
-        m.put(Boolean.class, (TypeConverter<Boolean>) Boolean::parseBoolean);
+        addPair(m, int.class, Integer.class, Integer::parseInt);
+        addPair(m, long.class, Long.class, Long::parseLong);
+        addPair(m, double.class, Double.class, Double::parseDouble);
+        addPair(m, float.class, Float.class, Float::parseFloat);
+        addPair(m, boolean.class, Boolean.class, Boolean::parseBoolean);
         m.put(Path.class, (TypeConverter<Path>) Path::of);
         m.put(Duration.class, (TypeConverter<Duration>) FemtoCli::parseDuration);
         BUILTIN_CONVERTERS = Collections.unmodifiableMap(m);
     }
 
-    /**
-     * Parse duration a short human format like
-     * "400ms", "4.5s", "2m", "1h", "1d"
-     */
+    private static <T> void addPair(Map<Class<?>, TypeConverter<?>> m, Class<?> prim, Class<T> boxed, TypeConverter<T> c) {
+        m.put(prim, c); m.put(boxed, c);
+    }
+
     static Duration parseDuration(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException("Duration cannot be null or empty");
@@ -1054,8 +934,8 @@ public final class FemtoCli {
 
     static List<Field> allFields(Class<?> type) {
         List<Field> fields = new ArrayList<>();
-        for (Class<?> current = type; current != null && current != Object.class; current = current.getSuperclass()) {
-            fields.addAll(Arrays.asList(current.getDeclaredFields()));
+        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+            Collections.addAll(fields, c.getDeclaredFields());
         }
         return fields;
     }
@@ -1074,16 +954,10 @@ public final class FemtoCli {
 
     private static final ThreadLocal<UsageContext> USAGE_CONTEXT = new ThreadLocal<>();
 
-    /**
-     * Converts a single string value to the requested Java type.
-     *
-     * <p>Resolution order:</p>
-     * <ol>
-     *   <li>Custom converters provided by the Builder / run overload</li>
-     *   <li>Built-in converters (primitives, boxed types, Path, Duration, ...)</li>
-     *   <li>Enum types (case-insensitive)</li>
-     * </ol>
-     */
+    private static void setUsageCtx(List<String> commandPath, CommandConfig commandConfig, boolean agentMode) {
+        USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+    }
+
     private static Object convert(String value,
                                   Class<?> type,
                                   String fieldName,
@@ -1102,19 +976,12 @@ public final class FemtoCli {
                 return perOpt.convert(value);
             }
 
-            // 2) Custom converter
-            TypeConverter<?> custom = converters.get(type);
-            if (custom != null) {
-                return custom.convert(value);
-            }
+            // 2) Custom or built-in converter
+            TypeConverter<?> tc = converters.get(type);
+            if (tc == null) tc = BUILTIN_CONVERTERS.get(type);
+            if (tc != null) return tc.convert(value);
 
-            // 3) Built-in converter
-            TypeConverter<?> builtin = BUILTIN_CONVERTERS.get(type);
-            if (builtin != null) {
-                return builtin.convert(value);
-            }
-
-            // 4) Enums (case-insensitive)
+            // Enums (case-insensitive)
             if (type.isEnum()) {
                 @SuppressWarnings({"rawtypes", "unchecked"})
                 Class<? extends Enum> e = (Class<? extends Enum>) type;
@@ -1140,22 +1007,7 @@ public final class FemtoCli {
         }
     }
 
-    /**
-     * Used by help placeholder ${COMPLETION-CANDIDATES}.
-     */
-    static String enumCandidates(Class<?> type) {
-        return enumCandidates(type, null, ", ");
-    }
 
-    static String enumCandidates(Class<?> type, me.bechberger.femtocli.annotations.Option opt) {
-        return enumCandidates(type, opt, ", ");
-    }
-
-    /**
-     * Used by help placeholder ${COMPLETION-CANDIDATES}.
-     * If opt is provided and showEnumDescriptions is true, includes descriptions from getDescription() method.
-     * Uses the provided joiner to separate enum values (defaults to ", ").
-     */
     static String enumCandidates(Class<?> type, me.bechberger.femtocli.annotations.Option opt, String joiner) {
         if (type == null || !type.isEnum()) return "";
         Object[] constants = type.getEnumConstants();
@@ -1194,153 +1046,86 @@ public final class FemtoCli {
         return sj.toString();
     }
 
-    private static void injectSpec(CommandModel model,
-                                   PrintStream out,
-                                   PrintStream err,
-                                   List<String> commandPath,
-                                   CommandConfig commandConfig) throws Exception {
-        injectSpec(model, out, err, commandPath, commandConfig, List.of());
-    }
 
     private static void injectSpec(CommandModel model,
-                                   PrintStream out,
-                                   PrintStream err,
-                                   List<String> commandPath,
-                                   CommandConfig commandConfig,
+                                   PrintStream out, PrintStream err,
+                                   List<String> commandPath, CommandConfig commandConfig,
                                    List<Object> commandChain) throws Exception {
-        me.bechberger.femtocli.Spec spec = new me.bechberger.femtocli.Spec(model.cmd, out, err, commandPath, commandConfig, commandChain);
+        Spec spec = new Spec(model.cmd, out, err, commandPath, commandConfig, commandChain);
         for (Field f : allFields(model.cmd.getClass())) {
             f.setAccessible(true);
-            if (!me.bechberger.femtocli.Spec.class.isAssignableFrom(f.getType())) {
-                continue;
+            if (Spec.class.isAssignableFrom(f.getType()) && f.get(model.cmd) == null) {
+                f.set(model.cmd, spec);
             }
-            if (f.get(model.cmd) != null) {
-                continue;
-            }
-            f.set(model.cmd, spec);
         }
     }
 
     private static Method resolveMethod(String spec, Class<?> defaultClass) throws ClassNotFoundException, NoSuchMethodException {
-        String classPart;
-        String methodPart;
-        if (spec.contains("#")) {
-            String[] parts = spec.split("#", 2);
-            classPart = parts[0];
-            methodPart = parts[1];
-        } else {
-            classPart = null;
-            methodPart = spec;
-        }
+        int hash = spec.indexOf('#');
+        String classPart = hash >= 0 ? spec.substring(0, hash) : null;
+        String methodPart = hash >= 0 ? spec.substring(hash + 1) : spec;
 
         Class<?> owner;
         if (classPart == null || classPart.isBlank()) {
             owner = Objects.requireNonNull(defaultClass, "No default class available for method: " + spec);
         } else {
-            // Try resolving relative to the command class first, to support nested helper classes.
-            owner = null;
-            if (defaultClass != null) {
-                // 1) Nested class of the default class OR any of its enclosing classes
-                for (Class<?> c = defaultClass; c != null; c = c.getEnclosingClass()) {
-                    try {
-                        owner = Class.forName(c.getName() + "$" + classPart);
-                        break;
-                    } catch (ClassNotFoundException ignored) {
-                        // try next
-                    }
-                }
-                if (owner == null) {
-                    // 2) Same package as the default class
-                    Package p = defaultClass.getPackage();
-                    String pkg = p != null ? p.getName() : "";
-                    if (!pkg.isBlank()) {
-                        try {
-                            owner = Class.forName(pkg + "." + classPart);
-                        } catch (ClassNotFoundException ignored) {
-                            // fall through to as-is resolution
-                        }
-                    }
-                }
-            }
-
-            // 3) As-is (fully qualified class name)
-            if (owner == null) {
-                owner = Class.forName(classPart);
-            }
+            owner = resolveClass(classPart, defaultClass);
         }
 
         for (Method m : owner.getDeclaredMethods()) {
-            if (m.getName().equals(methodPart)) {
-                return m;
-            }
+            if (m.getName().equals(methodPart)) return m;
         }
         for (Method m : owner.getMethods()) {
-            if (m.getName().equals(methodPart)) {
-                return m;
-            }
+            if (m.getName().equals(methodPart)) return m;
         }
         throw new NoSuchMethodException("Cannot find method " + methodPart + " on " + owner.getName());
     }
 
+    private static Class<?> resolveClass(String classPart, Class<?> defaultClass) throws ClassNotFoundException {
+        if (defaultClass != null) {
+            for (Class<?> c = defaultClass; c != null; c = c.getEnclosingClass()) {
+                try { return Class.forName(c.getName() + "$" + classPart); }
+                catch (ClassNotFoundException ignored) {}
+            }
+            Package p = defaultClass.getPackage();
+            if (p != null && !p.getName().isBlank()) {
+                try { return Class.forName(p.getName() + "." + classPart); }
+                catch (ClassNotFoundException ignored) {}
+            }
+        }
+        return Class.forName(classPart);
+    }
+
+    private static final Map<Class<?>, Class<?>> PRIMITIVE_TO_WRAPPER = Map.of(
+            int.class, Integer.class, long.class, Long.class,
+            double.class, Double.class, float.class, Float.class,
+            boolean.class, Boolean.class, short.class, Short.class,
+            byte.class, Byte.class, char.class, Character.class);
+
     private static boolean isPrimitiveWrapperAssignable(Class<?> targetType, Class<?> actualType) {
-        if (targetType == null || actualType == null) return false;
-        if (!targetType.isPrimitive()) return false;
-        return (targetType == int.class && actualType == Integer.class)
-                || (targetType == long.class && actualType == Long.class)
-                || (targetType == double.class && actualType == Double.class)
-                || (targetType == float.class && actualType == Float.class)
-                || (targetType == boolean.class && actualType == Boolean.class)
-                || (targetType == short.class && actualType == Short.class)
-                || (targetType == byte.class && actualType == Byte.class)
-                || (targetType == char.class && actualType == Character.class);
+        return targetType != null && actualType != null
+                && actualType.equals(PRIMITIVE_TO_WRAPPER.get(targetType));
     }
 
-    /**
-     * Find a similar option name using Levenshtein distance.
-     * Returns the most similar option if it's reasonably close, otherwise null.
-     */
-    private static String findSimilarOption(String invalidOption, Set<String> validOptions) {
+    private static String findSimilarOption(String invalid, Set<String> validOptions) {
         if (validOptions.isEmpty()) return null;
-
-        String bestMatch = null;
-        int bestDistance = Integer.MAX_VALUE;
-
-        for (String validOption : validOptions) {
-            int distance = levenshteinDistance(invalidOption, validOption);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                bestMatch = validOption;
+        String best = null;
+        int bestDist = Integer.MAX_VALUE;
+        for (String valid : validOptions) {
+            // Inline Levenshtein distance
+            int len1 = invalid.length(), len2 = valid.length();
+            int[] prev = new int[len2 + 1], curr = new int[len2 + 1];
+            for (int j = 0; j <= len2; j++) prev[j] = j;
+            for (int i = 1; i <= len1; i++) {
+                curr[0] = i;
+                for (int j = 1; j <= len2; j++) {
+                    curr[j] = invalid.charAt(i - 1) == valid.charAt(j - 1) ? prev[j - 1] :
+                        1 + Math.min(prev[j], Math.min(curr[j - 1], prev[j - 1]));
+                }
+                int[] tmp = prev; prev = curr; curr = tmp;
             }
+            if (prev[len2] < bestDist) { bestDist = prev[len2]; best = valid; }
         }
-
-        return bestDistance <= Math.max(2, invalidOption.length() / 2) ? bestMatch : null;
-    }
-
-    /**
-     * Calculate the Levenshtein distance between two strings.
-     * This is the minimum number of single-character edits (insertions, deletions, or substitutions)
-     * required to change one string into the other.
-     */
-    private static int levenshteinDistance(String s1, String s2) {
-        int len1 = s1.length();
-        int len2 = s2.length();
-
-        int[] prev = new int[len2 + 1];
-        int[] curr = new int[len2 + 1];
-
-        for (int j = 0; j <= len2; j++) prev[j] = j;
-
-        for (int i = 1; i <= len1; i++) {
-            curr[0] = i;
-            for (int j = 1; j <= len2; j++) {
-                curr[j] = s1.charAt(i - 1) == s2.charAt(j - 1) ? prev[j - 1] :
-                    1 + Math.min(prev[j], Math.min(curr[j - 1], prev[j - 1]));
-            }
-            int[] tmp = prev;
-            prev = curr;
-            curr = tmp;
-        }
-
-        return prev[len2];
+        return bestDist <= Math.max(2, invalid.length() / 2) ? best : null;
     }
 }

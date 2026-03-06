@@ -28,10 +28,6 @@ final class HelpRenderer {
         }
     }
 
-    static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out) {
-        render(cmd, commandPath, commandConfig, out, false);
-    }
-
     static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
         Command annotation = cmd.getClass().getAnnotation(Command.class);
         boolean hasSubcommandClasses = annotation != null && annotation.subcommands().length > 0;
@@ -84,59 +80,33 @@ final class HelpRenderer {
                                        boolean hasSubcommands,
                                        List<FemtoCli.OptionMeta> options, List<FemtoCli.ParamInfo> parameters, PrintStream out,
                                        boolean agentMode) {
-        if (agentMode) {
-            List<String> parts = new ArrayList<>();
-            parts.add(displayName);
-            if (showStandardHelpOptions) parts.add("[hV]");
-
-            for (FemtoCli.OptionMeta opt : options) {
-                if (opt.opt.hidden()) continue;
-                String optName = stripLeadingDashes(last(opt.opt.names()));
-                boolean isBoolean = FemtoCli.isBooleanType(opt.field.getType());
-                if (!isBoolean) {
-                    String paramLabel = getOptionParamLabel(opt);
-                    String token = optName + "=" + paramLabel;
-                    parts.add(opt.opt.required() ? token : "[" + token + "]");
-                } else if (!opt.opt.required()) {
-                    parts.add("[" + optName + "]");
-                }
-            }
-
-            if (hasSubcommands) parts.add("[COMMAND]");
-            for (FemtoCli.ParamInfo param : parameters) parts.add(getLabel(param));
-
-            out.println("Usage: " + String.join(",", parts));
-            return;
-        }
-
-        // non-agent mode (classic)
-        StringBuilder synopsis = new StringBuilder("Usage: ").append(displayName);
-        if (showStandardHelpOptions) synopsis.append(" [-hV]");
+        String sep = agentMode ? "," : " ";
+        List<String> parts = new ArrayList<>();
+        parts.add(agentMode ? displayName : "Usage: " + displayName);
+        if (showStandardHelpOptions) parts.add(agentMode ? "[hV]" : "[-hV]");
 
         for (FemtoCli.OptionMeta opt : options) {
             if (opt.opt.hidden()) continue;
-            String optName = last(opt.opt.names());
+            String rawName = opt.opt.names()[opt.opt.names().length - 1];
+            String optName = agentMode ? stripLeadingDashes(rawName) : rawName;
             boolean isBoolean = FemtoCli.isBooleanType(opt.field.getType());
-
             if (!isBoolean) {
-                String paramLabel = getOptionParamLabel(opt);
-                synopsis.append(opt.opt.required() ? " " : " [")
-                        .append(optName).append("=").append(paramLabel)
-                        .append(opt.opt.required() ? "" : "]");
+                String token = optName + "=" + getOptionParamLabel(opt);
+                parts.add(opt.opt.required() ? token : "[" + token + "]");
             } else if (!opt.opt.required()) {
-                synopsis.append(" [").append(optName).append("]");
+                parts.add("[" + optName + "]");
             }
         }
 
-        if (hasSubcommands) synopsis.append(" [COMMAND]");
-        for (FemtoCli.ParamInfo param : parameters) synopsis.append(" ").append(getLabel(param));
+        if (hasSubcommands) parts.add("[COMMAND]");
+        for (FemtoCli.ParamInfo param : parameters) parts.add(getLabel(param));
 
-        int usageIndent = "Usage: ".length() + displayName.length() + 1;
-        out.println(wrapTextBlock(synopsis.toString(), 80, usageIndent));
-    }
-
-    private static <T> T last(T[] a) {
-        return a[a.length - 1];
+        if (agentMode) {
+            out.println("Usage: " + String.join(sep, parts));
+        } else {
+            String line = String.join(sep, parts);
+            out.println(wrapTextBlock(line, 80, "Usage: ".length() + displayName.length() + 1));
+        }
     }
 
     private static String getLabel(FemtoCli.ParamInfo param) {
@@ -168,7 +138,10 @@ final class HelpRenderer {
                                                    Command annotation,
                                                    PrintStream out,
                                                    boolean agentMode) {
-        List<HelpEntry> entries = new ArrayList<>(getHelpEntries(parameters));
+        List<HelpEntry> entries = new ArrayList<>();
+        for (FemtoCli.ParamInfo param : parameters) {
+            entries.add(new HelpEntry(getLabel(param), param.param.description(), false));
+        }
 
         List<HelpEntry> optionEntries = new ArrayList<>();
         if (showStandardHelpOptions) {
@@ -200,64 +173,32 @@ final class HelpRenderer {
         }
     }
 
-    private static List<HelpEntry> getHelpEntries(List<FemtoCli.ParamInfo> parameters) {
-        List<HelpEntry> entries = new ArrayList<>();
-
-        for (FemtoCli.ParamInfo param : parameters) {
-            String label = getLabel(param);
-            entries.add(new HelpEntry(label, param.param.description(), false));
-        }
-        return entries;
-    }
-
     private static String formatOptionNames(FemtoCli.OptionMeta opt, boolean agentMode) {
-        StringBuilder sb = new StringBuilder();
         String[] names = opt.opt.names();
-
-        String[] sortedNames = Arrays.copyOf(names, names.length);
-        Arrays.sort(sortedNames, Comparator.comparingInt(String::length));
-
+        String[] sorted = Arrays.copyOf(names, names.length);
+        Arrays.sort(sorted, Comparator.comparingInt(String::length));
         if (agentMode) {
-            for (int i = 0; i < sortedNames.length; i++) {
-                sortedNames[i] = stripLeadingDashes(sortedNames[i]);
-            }
+            for (int i = 0; i < sorted.length; i++) sorted[i] = stripLeadingDashes(sorted[i]);
         }
-
-        sb.append(String.join(", ", sortedNames));
-
-        if (!FemtoCli.isBooleanType(opt.field.getType())) {
-            sb.append("=").append(getOptionParamLabel(opt));
-        }
-
-        return sb.toString();
+        String joined = String.join(", ", sorted);
+        return FemtoCli.isBooleanType(opt.field.getType()) ? joined : joined + "=" + getOptionParamLabel(opt);
     }
 
     private static void printAlignedEntry(PrintStream out, String label, String description, int labelWidth, boolean hasShortOption) {
-        String prefix = hasShortOption ? "  " : "      ";
-        String fullLabel = prefix + label;
-        int descriptionColumn = labelWidth + 6;
-        int maxDescriptionWidth = MAX_LINE_WIDTH - descriptionColumn;
+        String fullLabel = (hasShortOption ? "  " : "      ") + label;
+        int descCol = labelWidth + 6;
+        String fmt = "%-" + descCol + "s%s%n";
+        List<String> descLines = wrapLines(description, MAX_LINE_WIDTH - descCol);
 
-        List<String> descriptionLines = wrapLines(description, maxDescriptionWidth);
-
-        if (fullLabel.length() < descriptionColumn) {
-            if (descriptionLines.isEmpty()) {
-                out.println(fullLabel);
-            } else {
-                out.printf("%-" + descriptionColumn + "s%s%n", fullLabel, descriptionLines.get(0));
-                for (int i = 1; i < descriptionLines.size(); i++) {
-                    out.printf("%-" + descriptionColumn + "s%s%n", "", descriptionLines.get(i));
-                }
-            }
-        } else {
+        if (fullLabel.length() >= descCol || descLines.isEmpty()) {
             out.println(fullLabel);
-            for (String line : descriptionLines) {
-                out.printf("%-" + descriptionColumn + "s%s%n", "", line);
-            }
+            for (String line : descLines) out.printf(fmt, "", line);
+        } else {
+            out.printf(fmt, fullLabel, descLines.get(0));
+            for (int i = 1; i < descLines.size(); i++) out.printf(fmt, "", descLines.get(i));
         }
     }
 
-    // Merged word-wrap utilities:
     private static String wrapTextBlock(String text, int maxWidth, int subsequentIndent) {
         if (text == null || text.isEmpty() || maxWidth <= 0 || text.length() <= maxWidth) {
             return text == null ? "" : text;
@@ -306,8 +247,21 @@ final class HelpRenderer {
         if (!hasSubcommandClasses && !hasSubcommandMethods) return;
 
         List<String[]> entries = new ArrayList<>();
-        if (hasSubcommandClasses) collectDirectSubcommands(cmdClass, entries);
-        collectMethodSubs(cmdClass, entries);
+        Command annotation = cmdClass.getAnnotation(Command.class);
+        if (hasSubcommandClasses && annotation != null && !annotation.hidden()) {
+            for (Class<?> subcommand : annotation.subcommands()) {
+                Command sub = subcommand.getAnnotation(Command.class);
+                if (sub != null && !sub.hidden()) {
+                    entries.add(new String[]{sub.name(), sub.description().length > 0 ? sub.description()[0] : ""});
+                }
+            }
+        }
+        for (Method method : cmdClass.getDeclaredMethods()) {
+            Command cmdAnnotation = method.getAnnotation(Command.class);
+            if (cmdAnnotation != null && !cmdAnnotation.hidden()) {
+                entries.add(new String[]{cmdAnnotation.name(), cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : ""});
+            }
+        }
         if (entries.isEmpty()) return;
 
         out.println("Commands:");
@@ -320,44 +274,18 @@ final class HelpRenderer {
         }
     }
 
-    private static void collectDirectSubcommands(Class<?> cmdClass, List<String[]> entries) {
-        Command annotation = cmdClass.getAnnotation(Command.class);
-        if (annotation == null || annotation.hidden()) {
-            return;
-        }
-
-        for (Class<?> subcommand : annotation.subcommands()) {
-            Command sub = subcommand.getAnnotation(Command.class);
-            if (sub == null || sub.hidden()) {
-                continue;
-            }
-            String description = sub.description().length > 0 ? sub.description()[0] : "";
-            entries.add(new String[]{sub.name(), description});
-        }
-    }
-
-    private static boolean hasSubcommandMethods(Class<?> cmdClass) {
+    static boolean hasSubcommandMethods(Class<?> cmdClass) {
         for (Method method : cmdClass.getDeclaredMethods()) {
             if (method.getAnnotation(Command.class) != null) return true;
         }
         return false;
     }
 
-    private static void collectMethodSubs(Class<?> cmdClass, List<String[]> entries) {
-        for (Method method : cmdClass.getDeclaredMethods()) {
-            Command cmdAnnotation = method.getAnnotation(Command.class);
-            if (cmdAnnotation != null && !cmdAnnotation.hidden()) {
-                String description = cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : "";
-                entries.add(new String[]{cmdAnnotation.name(), description});
-            }
-        }
-    }
-
     private static String expandPlaceholders(String description, String defaultValue, Class<?> type, Option opt) {
         String result = description
                 .replace("${DEFAULT-VALUE}", defaultValue.equals(NO_DEFAULT_VALUE) ? "none" : defaultValue);
 
-        // Handle ${COMPLETION-CANDIDATES} with optional joiner: ${COMPLETION-CANDIDATES:, } or ${COMPLETION-CANDIDATES:\n}
+        // Handle ${COMPLETION-CANDIDATES}
         if (result.contains("${COMPLETION-CANDIDATES")) {
             result = expandCompletionCandidates(result, type, opt);
         }
@@ -399,71 +327,25 @@ final class HelpRenderer {
         return sb.toString();
     }
 
-    // (kept for backwards compatibility; no longer used for help output)
-    @Deprecated
-    @SuppressWarnings("unused")
-    private static void collectSubs(Class<?> cmdClass, String prefix, List<String[]> entries) {
-        Command annotation = cmdClass.getAnnotation(Command.class);
-        if (annotation == null) {
-            return;
-        }
-
-        if (annotation.hidden()) {
-            return;
-        }
-
-        String name = annotation.name();
-        String description = annotation.description().length > 0 ? annotation.description()[0] : "";
-
-        // Full command path that should show up in the *current* help output.
-        // Example: when collecting for root help, "ai full" should be shown, not "full".
-        String fullPath = prefix.isEmpty() ? name : (prefix + " " + name);
-
-        // Add entry (skip the command that owns this help screen; i.e. the "root" of this traversal)
-        if (!prefix.isEmpty()) {
-            entries.add(new String[]{fullPath, description});
-        }
-
-        // Recursively collect subcommands
-        for (Class<?> subcommand : annotation.subcommands()) {
-            collectSubs(subcommand, fullPath, entries);
-        }
-    }
 
     private static String maybeAppendDefaultValue(String description, Option opt, CommandConfig commandConfig, Command annotation) {
-        if (opt == null) {
+        if (opt == null || !commandConfig.effectiveShowDefaultValuesInHelp(annotation) || !opt.showDefaultValueInHelp())
             return description;
-        }
-        if (!commandConfig.effectiveShowDefaultValuesInHelp(annotation) || !opt.showDefaultValueInHelp()) {
+        if (opt.defaultValue() == null || opt.defaultValue().equals(NO_DEFAULT_VALUE))
             return description;
-        }
-        if (opt.defaultValue() == null || opt.defaultValue().equals(NO_DEFAULT_VALUE)) {
+        if (opt.description() != null && opt.description().contains("${DEFAULT-VALUE}"))
             return description;
-        }
-        // If the description already uses the placeholder, don't auto-append a template too.
-        if (opt.description() != null && opt.description().contains("${DEFAULT-VALUE}")) {
-            return description;
-        }
 
         String template = opt.defaultValueHelpTemplate();
-        if (template == null || template.isBlank()) {
-            template = commandConfig.effectiveDefaultValueHelpTemplate();
-        }
+        if (template == null || template.isBlank()) template = commandConfig.effectiveDefaultValueHelpTemplate();
         String rendered = template.replace("${DEFAULT-VALUE}", opt.defaultValue());
-        if (rendered.isBlank()) {
-            return description;
-        }
+        if (rendered.isBlank()) return description;
 
-        boolean forceNewLine = opt.defaultValueOnNewLine() || commandConfig.effectiveDefaultValueOnNewLine();
-        if (forceNewLine) {
-            return (description == null || description.isBlank())
-                    ? rendered.stripLeading()
-                    : description + "\n" + rendered.stripLeading();
+        boolean empty = description == null || description.isBlank();
+        if (opt.defaultValueOnNewLine() || commandConfig.effectiveDefaultValueOnNewLine()) {
+            return empty ? rendered.stripLeading() : description + "\n" + rendered.stripLeading();
         }
-
-        return (description == null || description.isBlank())
-                ? rendered.stripLeading()
-                : description + rendered;
+        return empty ? rendered.stripLeading() : description + rendered;
     }
 
     private static void renderFooter(Command annotation, PrintStream out) {

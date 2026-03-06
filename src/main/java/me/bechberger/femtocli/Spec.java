@@ -2,7 +2,6 @@ package me.bechberger.femtocli;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,14 +15,6 @@ public final class Spec {
     private final CommandConfig commandConfig;
     private final List<Object> commandChain;
 
-    Spec(Object command, PrintStream out, PrintStream err, List<String> commandPath, CommandConfig commandConfig) {
-        this(command, out, err, commandPath, commandConfig, List.of());
-    }
-
-    Spec(Object command, PrintStream out, PrintStream err, List<String> commandPath, CommandConfig commandConfig, Object parentCommand) {
-        this(command, out, err, commandPath, commandConfig,
-             parentCommand != null ? List.of(parentCommand) : List.of());
-    }
 
     Spec(Object command, PrintStream out, PrintStream err, List<String> commandPath, CommandConfig commandConfig, List<Object> commandChain) {
         this.command = command;
@@ -87,6 +78,6 @@ public final class Spec {
     /** Print usage for the current command to the provided output stream. */
     public void usage(PrintStream out) {
         // Use the contextual overload so output matches the configuring FemtoCli instance.
-        FemtoCli.usage(command, commandPath, commandConfig, out);
+        FemtoCli.usage(command, commandPath, commandConfig, out, false);
     }
 }
