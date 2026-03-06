@@ -22,6 +22,7 @@ Features
 - Positional parameters via `@Parameters` (index, arity, paramLabel, defaultValue)
 - Mixins (reusable option groups) via `@Mixin`
 - Nested subcommands (classes and methods)
+- Parent command access: subcommands can access ancestor commands and their parsed options via `Spec.getParent()`
 - Multi-value options: arrays and `List` (repeat option or use `split` delimiter)
 - Built-in type conversion for primitive types, `Path`, `Duration`, enums, and support for custom converters
 - Enum descriptions: show descriptive text for enum values in help with `showEnumDescriptions = true`
@@ -730,6 +731,89 @@ Example that uses Spec
   -h, --help                   Show this help message and exit.
   -i, --interval=<interval>    Sampling interval (default: 10ms)
   -V, --version                Print version information and exit.
+```
+<!-- @femtocli:end -->
+
+### Parent command access [(source)](examples/src/main/java/me/bechberger/femtocli/examples/DeepParentAccess.java)
+
+Subcommands can access their parent command (and its parsed options) via `Spec.getParent()` or `Spec.getParent(Class)`.
+Options are parsed at each level before descending into subcommands, so `--verbose db --host myhost migrate`
+parses `--verbose` into the root, `--host` into `db`, and `migrate` can access both ancestors.
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/DeepParentAccess.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.Spec;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+
+@Command(name = "cli", description = "Deep parent access example", subcommands = {DeepParentAccess.Database.class})
+public class DeepParentAccess implements Runnable {
+    @Option(names = {"-c", "--config"}, description = "Config file path", defaultValue = "default.conf")
+    String config;
+
+    @Option(names = {"-v", "--verbose"}, description = "Enable verbose output")
+    boolean verbose;
+
+    @Override
+    public void run() {
+        System.out.println("Root command executed with config: " + config);
+    }
+
+    @Command(name = "db", description = "Database operations", subcommands = {Migrate.class})
+    public static class Database implements Runnable {
+        Spec spec;
+
+        @Option(names = {"-h", "--host"}, description = "Database host", defaultValue = "localhost")
+        String host;
+
+        @Option(names = {"-p", "--port"}, description = "Database port", defaultValue = "5432")
+        int port;
+
+        @Override
+        public void run() {
+            DeepParentAccess root = spec.getParent(DeepParentAccess.class);
+            System.out.println("Database: Connecting to " + host + ":" + port);
+            System.out.println("  Config: " + root.config);
+            System.out.println("  Verbose: " + root.verbose);
+        }
+    }
+
+    @Command(name = "migrate", description = "Run database migrations")
+    public static class Migrate implements Runnable {
+        Spec spec;
+
+        @Option(names = {"-d", "--direction"}, description = "Migration direction (up/down)", defaultValue = "up")
+        String direction;
+
+        @Override
+        public void run() {
+            // getParent() returns the direct parent
+            Database db = (Database) spec.getParent();
+            // getParent(Class) searches the entire ancestor chain
+            DeepParentAccess root = spec.getParent(DeepParentAccess.class);
+
+            System.out.println("Migration " + direction);
+            System.out.println("  Host: " + db.host + ":" + db.port);
+            System.out.println("  Config: " + root.config + ", verbose: " + root.verbose);
+        }
+    }
+
+    public static void main(String[] args) {
+        FemtoCli.run(new DeepParentAccess(), args);
+    }
+}
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="DeepParentAccess" args=["--config","prod.conf","--verbose","db","--host","db.example.com","migrate","--direction","down"] -->
+```sh
+> ./examples/run.sh DeepParentAccess --config prod.conf --verbose db --host db.example.com migrate --direction down
+Migration down
+  Host: db.example.com:5432
+  Config: prod.conf, verbose: true
 ```
 <!-- @femtocli:end -->
 

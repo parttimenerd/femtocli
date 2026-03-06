@@ -141,20 +141,57 @@ public final class FemtoCli {
         try {
             var tokens = new ArrayDeque<>(Arrays.asList(args));
             Object cmd = root;
-
-            // Track fully-qualified command path for help output
+            List<Object> commandChain = new ArrayList<>();
             List<String> commandPath = new ArrayList<>();
             commandPath.add(commandName(root));
 
-            // Resolve subcommand chain
-            while (!tokens.isEmpty()) {
-                String next = tokens.peekFirst();
+            // Process commands and their options in sequence
+            while (true) {
+                // Check for help/version at current level
+                if (!tokens.isEmpty()) {
+                    String next = tokens.peekFirst();
+                    if (agentMode) {
+                        next = normalizeBareHelpOrVersionToken(next);
+                    }
 
-                // In agent mode, allow bare help/version tokens at any depth.
+                    if (isHelp(next)) {
+                        USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+                        usage(cmd, out);
+                        return commandConfig.helpExitCode;
+                    }
+                    if (isVersion(next)) {
+                        USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+                        version(root, out);
+                        return 0;
+                    }
+                }
+
+                // If the current command has no subcommands, it's the final command
+                if (!hasSubcommands(cmd.getClass())) {
+                    break;
+                }
+
+                // This command has subcommands: parse its options, then look for subcommand
+                CommandModel model = CommandModel.of(cmd);
+                injectSpec(model, out, err, List.copyOf(commandPath), commandConfig, List.copyOf(commandChain));
+                if (agentMode) {
+                    normalizeBareOptionTokens(cmd, tokens, model);
+                }
+                parseOptionsBeforeSubcommand(cmd, tokens, converters);
+
+                // After parsing options, check if there's a subcommand
+                if (tokens.isEmpty()) {
+                    // No subcommand given - fall through to invoke this command
+                    USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
+                    return invoke(cmd);
+                }
+
+                String next = tokens.peekFirst();
                 if (agentMode) {
                     next = normalizeBareHelpOrVersionToken(next);
                 }
 
+                // Check for help/version again after parsing options
                 if (isHelp(next)) {
                     USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     usage(cmd, out);
@@ -165,9 +202,6 @@ public final class FemtoCli {
                     version(root, out);
                     return 0;
                 }
-                if (next.startsWith("-")) {
-                    break;
-                }
 
                 // Check for subcommand class
                 Class<?> sub = findSubcommand(cmd.getClass(), next);
@@ -175,9 +209,10 @@ public final class FemtoCli {
                     tokens.removeFirst();
                     var ctor = sub.getDeclaredConstructor();
                     ctor.setAccessible(true);
+                    commandChain.add(cmd);
                     cmd = ctor.newInstance();
                     commandPath.add(commandName(cmd));
-                    continue;
+                    continue; // Process next level
                 }
 
                 // Check for @Command method
@@ -191,13 +226,16 @@ public final class FemtoCli {
                     USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
                     return invokeSubcommandMethod(cmd, method, tokens, converters);
                 }
+
+                // No subcommand found - this is the final command
                 break;
             }
 
+            // Final command: full parsing (options + positionals + required validation)
             USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
 
             CommandModel model = CommandModel.of(cmd);
-            injectSpec(model, out, err, List.copyOf(commandPath), commandConfig);
+            injectSpec(model, out, err, List.copyOf(commandPath), commandConfig, List.copyOf(commandChain));
 
             if (agentMode) {
                 normalizeBareOptionTokens(cmd, tokens, model);
@@ -447,6 +485,48 @@ public final class FemtoCli {
         validateRequiredOptions(cmd, model.options, seenFields);
     }
 
+    /**
+     * Parse only options (not positionals) before encountering a subcommand.
+     * Stops at the first non-option token and leaves it in the queue.
+     */
+    private static void parseOptionsBeforeSubcommand(Object cmd, Deque<String> tokens,
+                                                     Map<Class<?>, TypeConverter<?>> converters) throws Exception {
+        var model = CommandModel.of(cmd);
+
+        UsageContext ctx = USAGE_CONTEXT.get();
+        CommandConfig config = ctx != null ? ctx.commandConfig : new CommandConfig();
+
+        Set<Field> seenFields = new HashSet<>();
+        Set<Field> seenFieldsWithoutValue = new HashSet<>();
+        Map<Field, List<String>> multiValueFields = new HashMap<>();
+        boolean acceptOptions = true;
+
+        while (!tokens.isEmpty()) {
+            String token = tokens.peekFirst(); // Peek, don't remove yet
+
+            if (acceptOptions && "--".equals(token)) {
+                tokens.removeFirst();
+                acceptOptions = false;
+                continue;
+            }
+
+            if (acceptOptions && token.startsWith("-")) {
+                tokens.removeFirst(); // Now remove it
+                parseOption(model, cmd, token, tokens, seenFields, seenFieldsWithoutValue, multiValueFields, converters, config);
+            } else {
+                // Hit a non-option token (likely subcommand or positional), stop parsing
+                break;
+            }
+        }
+
+        // Apply multi-value fields
+        applyMultiValueFields(model, multiValueFields, converters);
+
+        // Apply default values for unseen options
+        applyDefaultValues(model, seenFields, seenFieldsWithoutValue, converters);
+
+        // Don't bind positionals or validate required options here - that happens for the final command
+    }
     private static void throwIfHelpOrVersion(Object cmd, String token) throws UsageEx {
         if (isHelp(token)) {
             throw UsageEx.help(cmd);
@@ -459,9 +539,9 @@ public final class FemtoCli {
     private static void injectSpecFromContext(CommandModel model) throws Exception {
         UsageContext ctx = USAGE_CONTEXT.get();
         if (ctx != null) {
-            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig);
+            injectSpec(model, System.out, System.err, ctx.commandPath, ctx.commandConfig, List.of());
         } else {
-            injectSpec(model, System.out, System.err, List.of(commandName(model.cmd)), new CommandConfig());
+            injectSpec(model, System.out, System.err, List.of(commandName(model.cmd)), new CommandConfig(), List.of());
         }
     }
 
@@ -925,6 +1005,16 @@ public final class FemtoCli {
         throw new IllegalStateException("Command must implement Runnable or Callable<Integer>");
     }
 
+    private static boolean hasSubcommands(Class<?> cmdClass) {
+        Command ann = cmdClass.getAnnotation(Command.class);
+        if (ann != null && ann.subcommands().length > 0) return true;
+        // Also check for @Command methods
+        for (Method m : cmdClass.getDeclaredMethods()) {
+            if (m.getAnnotation(Command.class) != null) return true;
+        }
+        return false;
+    }
+
     private static Class<?> findSubcommand(Class<?> cmdClass, String name) {
         Command ann = cmdClass.getAnnotation(Command.class);
         if (ann == null) return null;
@@ -1098,7 +1188,16 @@ public final class FemtoCli {
                                    PrintStream err,
                                    List<String> commandPath,
                                    CommandConfig commandConfig) throws Exception {
-        me.bechberger.femtocli.Spec spec = new me.bechberger.femtocli.Spec(model.cmd, out, err, commandPath, commandConfig);
+        injectSpec(model, out, err, commandPath, commandConfig, List.of());
+    }
+
+    private static void injectSpec(CommandModel model,
+                                   PrintStream out,
+                                   PrintStream err,
+                                   List<String> commandPath,
+                                   CommandConfig commandConfig,
+                                   List<Object> commandChain) throws Exception {
+        me.bechberger.femtocli.Spec spec = new me.bechberger.femtocli.Spec(model.cmd, out, err, commandPath, commandConfig, commandChain);
         for (Field f : allFields(model.cmd.getClass())) {
             f.setAccessible(true);
             if (!me.bechberger.femtocli.Spec.class.isAssignableFrom(f.getType())) {
