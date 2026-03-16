@@ -45,7 +45,11 @@ final class HelpRenderer {
 
         printLines(out, annotation == null ? null : annotation.header());
 
-        if (!printLines(out, annotation == null ? null : annotation.customSynopsis())) {
+        String[] customSynopsis = annotation == null ? null : annotation.customSynopsis();
+        if (customSynopsis != null && customSynopsis.length > 0) {
+            out.println("Usage: " + customSynopsis[0]);
+            for (int i = 1; i < customSynopsis.length; i++) out.println(customSynopsis[i]);
+        } else {
             renderSynopsis(commandPath, showStandardHelpOptions, hasSubcommands, model.options, model.parameters, out, agentMode);
         }
 

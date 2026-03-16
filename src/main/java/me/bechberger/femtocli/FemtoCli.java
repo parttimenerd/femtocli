@@ -152,8 +152,16 @@ public final class FemtoCli {
                 parseOptions(model, cmd, tokens, converters,
                         (USAGE_CONTEXT.get() != null ? USAGE_CONTEXT.get().commandConfig : commandConfig), true);
 
+                // Consume leading positional parameter values for this command so that
+                // the subcommand lookup below sees the actual subcommand name.
+                // E.g. for "agent <PID> start ...", consume <PID> then find "start".
+                List<String> parentPositionals = consumeLeadingPositionalTokens(cmd, tokens, model, agentMode);
+
                 // After parsing options, check if there's a subcommand
                 if (tokens.isEmpty()) {
+                    if (!parentPositionals.isEmpty()) {
+                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    }
                     // No subcommand given - fall through to invoke this command
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     return invoke(cmd);
@@ -161,7 +169,12 @@ public final class FemtoCli {
 
                 // Check for help/version again after parsing options
                 hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
-                if (hvResult >= 0) return hvResult;
+                if (hvResult >= 0) {
+                    if (!parentPositionals.isEmpty()) {
+                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    }
+                    return hvResult;
+                }
 
                 String next = peekNormalized(tokens, agentMode);
 
@@ -169,6 +182,9 @@ public final class FemtoCli {
                 Class<?> sub = findSubcommand(cmd.getClass(), next);
                 if (sub != null) {
                     tokens.removeFirst();
+                    if (!parentPositionals.isEmpty()) {
+                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    }
                     commandChain.add(cmd);
                     cmd = instantiateSubcommand(sub);
                     commandPath.add(commandName(cmd));
@@ -179,6 +195,9 @@ public final class FemtoCli {
                 Method method = findSubcommandMethod(cmd.getClass(), next);
                 if (method != null) {
                     tokens.removeFirst();
+                    if (!parentPositionals.isEmpty()) {
+                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    }
                     Command mc = method.getAnnotation(Command.class);
                     if (mc != null && !mc.name().isBlank()) {
                         commandPath.add(mc.name());
@@ -189,6 +208,9 @@ public final class FemtoCli {
 
                 // Bare "help" token in subcommand position → treat as --help
                 if ("help".equals(next)) {
+                    if (!parentPositionals.isEmpty()) {
+                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    }
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     usage(cmd, out);
                     return commandConfig.helpExitCode;
@@ -198,11 +220,18 @@ public final class FemtoCli {
                 Command cmdAnn = cmd.getClass().getAnnotation(Command.class);
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
                 if (defaultSub != void.class) {
-                    // Do NOT consume the token – it becomes a positional for the default subcommand
+                    // Put positionals back – they become positionals for the default subcommand
+                    for (int i = parentPositionals.size() - 1; i >= 0; i--) {
+                        tokens.addFirst(parentPositionals.get(i));
+                    }
                     commandChain.add(cmd);
                     cmd = instantiateSubcommand(defaultSub);
                     commandPath.add(commandName(cmd));
                     continue;
+                }
+                // Put positionals back for parseInto
+                for (int i = parentPositionals.size() - 1; i >= 0; i--) {
+                    tokens.addFirst(parentPositionals.get(i));
                 }
                 break;
             }
@@ -911,6 +940,35 @@ public final class FemtoCli {
             if (m.getAnnotation(Command.class) != null) return true;
         }
         return false;
+    }
+
+    /**
+     * Consume leading non-option tokens that are not subcommand names,
+     * up to the number of fixed (non-varargs) positional parameters defined on the command.
+     */
+    private static List<String> consumeLeadingPositionalTokens(Object cmd, Deque<String> tokens,
+                                                               CommandModel model, boolean agentMode) {
+        List<String> consumed = new ArrayList<>();
+        int fixedCount = 0;
+        for (ParamInfo p : model.parameters) {
+            if (p.indexRange[1] != -1
+                    && !List.class.isAssignableFrom(p.field.getType())
+                    && !p.field.getType().isArray()) {
+                fixedCount++;
+            }
+        }
+        for (int i = 0; i < fixedCount && !tokens.isEmpty(); i++) {
+            String tok = tokens.peekFirst();
+            if (tok.startsWith("-")) break;
+            String normalized = agentMode && tok.startsWith("'") && tok.endsWith("'")
+                    ? tok.substring(1, tok.length() - 1) : tok;
+            if (findSubcommand(cmd.getClass(), normalized) != null) break;
+            if (findSubcommandMethod(cmd.getClass(), normalized) != null) break;
+            if ("help".equals(normalized) || "version".equals(normalized)) break;
+            tokens.removeFirst();
+            consumed.add(tok);
+        }
+        return consumed;
     }
 
     private static Class<?> findSubcommand(Class<?> cmdClass, String name) {
