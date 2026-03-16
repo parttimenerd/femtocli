@@ -187,6 +187,13 @@ public final class FemtoCli {
                     return invokeSubcommandMethod(cmd, method, tokens, converters);
                 }
 
+                // Bare "help" token in subcommand position → treat as --help
+                if ("help".equals(next)) {
+                    setUsageCtx(commandPath, commandConfig, agentMode);
+                    usage(cmd, out);
+                    return commandConfig.helpExitCode;
+                }
+
                 // No subcommand found – check for a default subcommand
                 Command cmdAnn = cmd.getClass().getAnnotation(Command.class);
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
@@ -639,7 +646,7 @@ public final class FemtoCli {
                                          Map<Class<?>, TypeConverter<?>> converters, Object cmd) throws Exception {
         Object array = Array.newInstance(componentType, values.size());
         for (int i = 0; i < values.size(); i++) {
-            Object converted = convert(values.get(i), componentType, fieldName, opt, converters, cmd);
+            Object converted = convert(values.get(i), componentType, fieldName, opt, param, converters, cmd);
             runVerifiers(cmd, converted, opt, param);
             Array.set(array, i, converted);
         }
@@ -651,7 +658,7 @@ public final class FemtoCli {
                                               Map<Class<?>, TypeConverter<?>> converters, Object cmd) throws Exception {
         List<Object> list = new ArrayList<>();
         for (String v : values) {
-            Object converted = convert(v, String.class, fieldName, opt, converters, cmd);
+            Object converted = convert(v, String.class, fieldName, opt, param, converters, cmd);
             runVerifiers(cmd, converted, opt, param);
             list.add(converted);
         }
@@ -798,7 +805,7 @@ public final class FemtoCli {
         } else if (List.class.isAssignableFrom(field.getType())) {
             field.set(cmd, convertToList(values, field.getName(), null, paramInfo.param, converters, cmd));
         } else if (!values.isEmpty()) {
-            Object converted = convert(values.get(0), field.getType(), field.getName(), null, converters, cmd);
+            Object converted = convert(values.get(0), field.getType(), field.getName(), null, paramInfo.param, converters, cmd);
             runVerifiers(cmd, converted, null, paramInfo.param);
             field.set(cmd, converted);
         }
@@ -814,7 +821,7 @@ public final class FemtoCli {
 
         if (currentIndex < positionals.size()) {
             String value = positionals.get(currentIndex);
-            Object converted = convert(value, field.getType(), field.getName(), null, converters, cmd);
+            Object converted = convert(value, field.getType(), field.getName(), null, param, converters, cmd);
             runVerifiers(cmd, converted, null, param);
             field.set(cmd, converted);
             return currentIndex + 1;
@@ -825,7 +832,7 @@ public final class FemtoCli {
         }
 
         if (!param.defaultValue().equals(NO_DEFAULT_VALUE)) {
-            Object converted = convert(param.defaultValue(), field.getType(), field.getName(), null, converters, cmd);
+            Object converted = convert(param.defaultValue(), field.getType(), field.getName(), null, param, converters, cmd);
             runVerifiers(cmd, converted, null, param);
             field.set(cmd, converted);
         }
@@ -964,16 +971,37 @@ public final class FemtoCli {
                                   Option opt,
                                   Map<Class<?>, TypeConverter<?>> converters,
                                   Object cmdForErrors) throws UsageEx {
+        return convert(value, type, fieldName, opt, null, converters, cmdForErrors);
+    }
+
+    private static Object convert(String value,
+                                  Class<?> type,
+                                  String fieldName,
+                                  Option opt,
+                                  Parameters param,
+                                  Map<Class<?>, TypeConverter<?>> converters,
+                                  Object cmdForErrors) throws UsageEx {
         try {
             // 0) Per-option converter method
             if (opt != null && !opt.converterMethod().isBlank()) {
                 return invokeConverterMethod(opt.converterMethod(), cmdForErrors, value, type);
             }
 
+            // 0b) Per-parameter converter method
+            if (param != null && !param.converterMethod().isBlank()) {
+                return invokeConverterMethod(param.converterMethod(), cmdForErrors, value, type);
+            }
+
             // 1) Per-option converter class
             if (opt != null && opt.converter() != TypeConverter.NullTypeConverter.class) {
                 TypeConverter<?> perOpt = opt.converter().getDeclaredConstructor().newInstance();
                 return perOpt.convert(value);
+            }
+
+            // 1b) Per-parameter converter class
+            if (param != null && param.converter() != TypeConverter.NullTypeConverter.class) {
+                TypeConverter<?> perParam = param.converter().getDeclaredConstructor().newInstance();
+                return perParam.convert(value);
             }
 
             // 2) Custom or built-in converter
@@ -1000,10 +1028,12 @@ public final class FemtoCli {
             throw e;
         } catch (Exception e) {
             String displayName = preferredOptionName(opt);
-            if (opt == null) {
+            if (opt == null && param != null) {
+                displayName = param.paramLabel().isEmpty() ? "<" + fieldName + ">" : param.paramLabel();
+            } else if (opt == null) {
                 displayName = "<" + fieldName + ">";
             }
-            throw new UsageEx(cmdForErrors, "Invalid value for " + displayName + ": " + value);
+            throw new UsageEx(cmdForErrors, "Invalid value for " + displayName + ": " + e.getMessage());
         }
     }
 

@@ -98,8 +98,8 @@ final class HelpRenderer {
             }
         }
 
-        if (hasSubcommands) parts.add("[COMMAND]");
         for (FemtoCli.ParamInfo param : parameters) parts.add(getLabel(param));
+        if (hasSubcommands) parts.add("[COMMAND]");
 
         if (agentMode) {
             out.println("Usage: " + String.join(sep, parts));
