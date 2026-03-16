@@ -11,7 +11,7 @@ import me.bechberger.femtocli.annotations.Option;
 @Command(
         name = "mytool",
         header = {"My Tool", "Copyright 2026"},
-        customSynopsis = {"mytool [OPTIONS] <file>"},
+        customSynopsis = {"Usage: mytool [OPTIONS] <file>"},
         description = "Process files",
         footer = """
                 Examples:

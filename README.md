@@ -1275,7 +1275,7 @@ import me.bechberger.femtocli.annotations.Option;
 @Command(
         name = "mytool",
         header = {"My Tool", "Copyright 2026"},
-        customSynopsis = {"Usage: mytool [OPTIONS] <file>"},
+        customSynopsis = {"mytool [OPTIONS] <file>"},
         description = "Process files",
         footer = """
                 Examples:
@@ -1433,6 +1433,7 @@ public class CustomTypeVerifiers implements Runnable {
 ```sh
 > ./examples/run.sh CustomTypeVerifiers --port 0
 Error: port out of range
+
 Usage: verifiers [-hV] [--port=<port>]
   -h, --help       Show this help message and exit.
       --port=<port>
@@ -1526,6 +1527,7 @@ Example with a typo using underscore instead of hyphen:
 Error: Unknown option: --input_file
 
   tip: a similar argument exists: '--input-file'
+
 Usage: didyoumean [-hV] [--input-file=<inputFile>] [--output-file=<outputFile>]
                   [--verbose]
 Example showing helpful error suggestions
