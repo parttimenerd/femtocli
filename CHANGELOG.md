@@ -14,6 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.3.3] - 2026-03-16
+
+### Added
+- Bare `help` token is now recognized in subcommand position (e.g., `app help` is equivalent to `app --help`)
+
+### Changed
+- Synopsis line now renders positional parameters before `[COMMAND]` (e.g., `Usage: app PID [COMMAND]` instead of `Usage: app [COMMAND] PID`)
+- Converter exceptions now preserve the original error message instead of discarding it (e.g., `Invalid value for <file>: File does not exist: foo.jfr` instead of `Invalid value for <file>: foo.jfr`)
+
+### Fixed
+- `@Parameters(converter = ...)` and `@Parameters(converterMethod = ...)` are now applied when binding positional arguments (previously they were silently ignored)
+
+### Security
+
 ## [0.3.2] - 2026-03-06
 
 ### Added
