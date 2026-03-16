@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.3.4] - 2026-03-16
+
+### Fixed
+- `customSynopsis` now renders with `Usage: ` prefix, consistent with auto-generated synopsis
+- Commands with both positional parameters and subcommands now correctly forward remaining args to subcommands (e.g., `app <PID> start --verbose` no longer reports `--verbose` as unknown on the parent command)
+
 ## [0.3.3] - 2026-03-16
 
 ### Added
