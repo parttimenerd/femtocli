@@ -30,10 +30,7 @@ final class HelpRenderer {
 
     static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
         Command annotation = cmd.getClass().getAnnotation(Command.class);
-        boolean hasSubcommandClasses = annotation != null && annotation.subcommands().length > 0;
-        boolean hasSubcommandMethods = hasSubcommandMethods(cmd.getClass());
-        boolean hasSubcommands = hasSubcommandClasses || hasSubcommandMethods;
-
+        boolean hasSubcommands = FemtoCli.hasSubcommands(cmd.getClass());
         boolean showStandardHelpOptions = commandConfig.effectiveMixinStandardHelpOptions(annotation);
 
         CommandModel model;
@@ -62,15 +59,14 @@ final class HelpRenderer {
         if (commandConfig.effectiveEmptyLineAfterDescription(annotation)) out.println();
 
         renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out, agentMode);
-        renderSubcommands(cmd.getClass(), hasSubcommandClasses, hasSubcommandMethods, out);
+        renderSubcommands(cmd.getClass(), hasSubcommands, out);
         renderFooter(annotation, out);
     }
 
     /** Print all lines; returns true if at least one line was printed. */
-    private static boolean printLines(PrintStream out, String[] lines) {
-        if (lines == null || lines.length == 0) return false;
+    private static void printLines(PrintStream out, String[] lines) {
+        if (lines == null) return;
         for (String line : lines) out.println(line);
-        return true;
     }
 
     static String stripLeadingDashes(String name) {
@@ -229,7 +225,7 @@ final class HelpRenderer {
             } else {
                 StringBuilder sb = new StringBuilder();
                 for (String word : line.split(" ")) {
-                    if (sb.length() == 0) {
+                    if (sb.isEmpty()) {
                         sb.append(word);
                     } else if (sb.length() + 1 + word.length() <= maxWidth) {
                         sb.append(" ").append(word);
@@ -239,25 +235,23 @@ final class HelpRenderer {
                         sb.append(word);
                     }
                 }
-                if (sb.length() > 0) result.add(sb.toString());
+                if (!sb.isEmpty()) result.add(sb.toString());
             }
         }
 
         return result.isEmpty() ? List.of(text) : result;
     }
 
-    private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommandClasses,
-                                          boolean hasSubcommandMethods, PrintStream out) {
-        if (!hasSubcommandClasses && !hasSubcommandMethods) return;
+    private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommands, PrintStream out) {
+        if (!hasSubcommands) return;
 
         List<String[]> entries = new ArrayList<>();
         Command annotation = cmdClass.getAnnotation(Command.class);
-        if (hasSubcommandClasses && annotation != null && !annotation.hidden()) {
-            for (Class<?> subcommand : annotation.subcommands()) {
-                Command sub = subcommand.getAnnotation(Command.class);
-                if (sub != null && !sub.hidden()) {
-                    entries.add(new String[]{sub.name(), sub.description().length > 0 ? sub.description()[0] : ""});
-                }
+        for (Class<?> subcommand : annotation.subcommands()) {
+            if (FemtoCli.isCommandRemoved(subcommand)) continue;
+            Command sub = subcommand.getAnnotation(Command.class);
+            if (sub != null && !sub.hidden()) {
+                entries.add(new String[]{sub.name(), sub.description().length > 0 ? sub.description()[0] : ""});
             }
         }
         for (Method method : cmdClass.getDeclaredMethods()) {
@@ -276,13 +270,6 @@ final class HelpRenderer {
         for (String[] entry : entries) {
             if (!entry[0].isEmpty()) out.printf("  %-" + (maxNameLength + 2) + "s%s%n", entry[0], entry[1]);
         }
-    }
-
-    static boolean hasSubcommandMethods(Class<?> cmdClass) {
-        for (Method method : cmdClass.getDeclaredMethods()) {
-            if (method.getAnnotation(Command.class) != null) return true;
-        }
-        return false;
     }
 
     private static String expandPlaceholders(String description, String defaultValue, Class<?> type, Option opt) {

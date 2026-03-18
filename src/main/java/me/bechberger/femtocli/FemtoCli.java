@@ -25,6 +25,7 @@ public final class FemtoCli {
     /** Builder for configuring FemtoCli with custom type handlers. */
     public static class Builder {
         private final Map<Class<?>, TypeConverter<?>> converters = new HashMap<>();
+        private final Set<Class<?>> removedCommands = new HashSet<>();
         private CommandConfig commandConfig = new CommandConfig();
 
         public <T> Builder registerType(Class<T> type, TypeConverter<T> converter) {
@@ -44,16 +45,31 @@ public final class FemtoCli {
             return this;
         }
 
+        /**
+         * Remove the given command classes so that they are ignored everywhere,
+         * including as transitive subcommands, and never show up in help.
+         *
+         * <pre>{@code
+         * FemtoCli.builder()
+         *         .removeCommands(Experimental.class, Internal.class)
+         *         .run(root, args);
+         * }</pre>
+         */
+        public Builder removeCommands(Class<?>... classes) {
+            Collections.addAll(removedCommands, classes);
+            return this;
+        }
+
         public int run(Object root, String... args) {
             return run(root, System.out, System.err, args);
         }
 
         public int run(Object root, PrintStream out, PrintStream err, String... args) {
-            return FemtoCli.execute(root, out, err, args, converters, commandConfig, false);
+            return FemtoCli.execute(root, out, err, args, converters, commandConfig, false, removedCommands);
         }
 
         public RunResult runCaptured(Object root, String... args) {
-            return captureRun((out, err) -> FemtoCli.execute(root, out, err, args, converters, commandConfig, false));
+            return captureRun((out, err) -> FemtoCli.execute(root, out, err, args, converters, commandConfig, false, removedCommands));
         }
     }
 
@@ -65,7 +81,7 @@ public final class FemtoCli {
      * and use the passed output and error streams for FemtoCli output.
      */
     public static int run(Object root, PrintStream out, PrintStream err, String... args) {
-        return execute(root, out, err, args, Map.of(), new CommandConfig(), false);
+        return execute(root, out, err, args, Map.of(), new CommandConfig(), false, Set.of());
     }
 
     public static RunResult runCaptured(Object root, String... args) {
@@ -95,7 +111,7 @@ public final class FemtoCli {
      */
     public static int runAgent(Object root, PrintStream out, PrintStream err, String agentArgs) {
         String[] argv = AgentArgs.toArgv(agentArgs);
-        return execute(root, out, err, argv, Map.of(), new CommandConfig(), true);
+        return execute(root, out, err, argv, Map.of(), new CommandConfig(), true, Set.of());
     }
 
     public static RunResult runAgentCaptured(Object root, String agentArgs) {
@@ -120,12 +136,15 @@ public final class FemtoCli {
     private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
                                Map<Class<?>, TypeConverter<?>> converters,
                                CommandConfig commandConfig,
-                               boolean agentMode) {
+                               boolean agentMode,
+                               Set<Class<?>> removedCommands) {
         if (root instanceof String) {
             throw new IllegalArgumentException("Root command cannot be a String (got " + root + ").");
         }
         UsageContext previous = USAGE_CONTEXT.get();
+        Set<Class<?>> previousRemoved = REMOVED_COMMANDS.get();
         try {
+            REMOVED_COMMANDS.set(removedCommands);
             var tokens = new ArrayDeque<>(Arrays.asList(args));
             Object cmd = root;
             List<Object> commandChain = new ArrayList<>();
@@ -219,7 +238,7 @@ public final class FemtoCli {
                 // No subcommand found – check for a default subcommand
                 Command cmdAnn = cmd.getClass().getAnnotation(Command.class);
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
-                if (defaultSub != void.class) {
+                if (defaultSub != void.class && !isCommandRemoved(defaultSub)) {
                     // Put positionals back – they become positionals for the default subcommand
                     for (int i = parentPositionals.size() - 1; i >= 0; i--) {
                         tokens.addFirst(parentPositionals.get(i));
@@ -276,6 +295,11 @@ public final class FemtoCli {
                 USAGE_CONTEXT.remove();
             } else {
                 USAGE_CONTEXT.set(previous);
+            }
+            if (previousRemoved == null) {
+                REMOVED_COMMANDS.remove();
+            } else {
+                REMOVED_COMMANDS.set(previousRemoved);
             }
         }
     }
@@ -932,9 +956,13 @@ public final class FemtoCli {
         throw new IllegalStateException("Command must implement Runnable or Callable<Integer>");
     }
 
-    private static boolean hasSubcommands(Class<?> cmdClass) {
+    public static boolean hasSubcommands(Class<?> cmdClass) {
         Command ann = cmdClass.getAnnotation(Command.class);
-        if (ann != null && ann.subcommands().length > 0) return true;
+        if (ann != null && ann.subcommands().length > 0) {
+            for (Class<?> sub : ann.subcommands()) {
+                if (!isCommandRemoved(sub)) return true;
+            }
+        }
         // Also check for @Command methods
         for (Method m : cmdClass.getDeclaredMethods()) {
             if (m.getAnnotation(Command.class) != null) return true;
@@ -975,6 +1003,7 @@ public final class FemtoCli {
         Command ann = cmdClass.getAnnotation(Command.class);
         if (ann == null) return null;
         for (Class<?> sub : ann.subcommands()) {
+            if (isCommandRemoved(sub)) continue;
             Command s = sub.getAnnotation(Command.class);
             if (s != null && s.name().equals(name)) return sub;
         }
@@ -1018,6 +1047,14 @@ public final class FemtoCli {
     }
 
     private static final ThreadLocal<UsageContext> USAGE_CONTEXT = new ThreadLocal<>();
+
+    static final ThreadLocal<Set<Class<?>>> REMOVED_COMMANDS = new ThreadLocal<>();
+
+    /** Returns the current set of removed command classes (never null). */
+    static boolean isCommandRemoved(Class<?> commandClass) {
+        Set<Class<?>> removed = REMOVED_COMMANDS.get();
+        return removed != null && removed.contains(commandClass);
+    }
 
     private static void setUsageCtx(List<String> commandPath, CommandConfig commandConfig, boolean agentMode) {
         USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));

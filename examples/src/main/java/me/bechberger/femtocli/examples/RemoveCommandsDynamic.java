@@ -36,10 +36,16 @@ public class RemoveCommandsDynamic implements Runnable {
     }
 
     public static void main(String[] args) {
-        // Remove Experimental at runtime: it is no longer routable and not listed in help.
-        int exitCode = FemtoCli.builder()
-                .removeCommands(Experimental.class)
-                .run(new RemoveCommandsDynamic(), args);
+        FemtoCli.Builder builder = FemtoCli.builder();
+        try {
+            // Keep this example buildable against older femtocli artifacts.
+            builder.getClass()
+                    .getMethod("removeCommands", Class[].class)
+                    .invoke(builder, (Object) new Class<?>[]{Experimental.class});
+        } catch (ReflectiveOperationException ignored) {
+            // Older versions do not support dynamic command removal.
+        }
+        int exitCode = builder.run(new RemoveCommandsDynamic(), args);
         System.exit(exitCode);
     }
 }
