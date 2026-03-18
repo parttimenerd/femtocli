@@ -32,6 +32,7 @@ Features
 - Description placeholders (`${DEFAULT-VALUE}`, `${COMPLETION-CANDIDATES}`)
 - Custom `header`, `customSynopsis`, and `footer` in help output
 - Ability to hide commands and options from help output
+- Dynamically remove command classes at runtime via `FemtoCli.builder().removeCommands(...)`
 - Support for "agent args" mode, like Java agents
 - Helpful error messages with "did you mean" suggestions for mistyped options
 
@@ -104,7 +105,7 @@ Add the library as a dependency in your project (< 60KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli</artifactId>
-  <version>0.3.4</version>
+  <version>0.3.5</version>
 </dependency>
 ```
 
@@ -114,7 +115,7 @@ And for the minimal version without debug metadata (< 45KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli-minimal</artifactId>
-  <version>0.3.4</version>
+  <version>0.3.5</version>
 </dependency>
 ```
 
@@ -1474,6 +1475,24 @@ public class GlobalConfiguration implements Runnable {
 1.2.3
 ```
 <!-- @femtocli:end -->
+
+### Dynamic command removal
+
+Use `FemtoCli.builder().removeCommands(...)` to disable selected command classes at runtime.
+Removed commands are ignored during routing (including transitive/default-subcommand paths) and are omitted from help output.
+
+```java
+@Command(name = "tool", subcommands = {Status.class, Experimental.class})
+class Tool implements Runnable {
+    public void run() {}
+}
+
+int exitCode = FemtoCli.builder()
+        .removeCommands(Experimental.class)
+        .run(new Tool(), args);
+```
+
+This is useful for feature flags, edition-specific CLIs, or temporarily disabling commands without changing annotations.
 
 ### "Did you mean" suggestions [(source)](examples/src/main/java/me/bechberger/femtocli/examples/DidYouMean.java)
 

@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.3.5] - 2026-03-18
+
+### Added
+- FemtoCli.builder().removeCommands(Class<?>...) to remove commands dynamically at runtime
+
 ## [0.3.4] - 2026-03-16
 
 ### Fixed
