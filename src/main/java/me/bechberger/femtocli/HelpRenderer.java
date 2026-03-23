@@ -40,7 +40,9 @@ final class HelpRenderer {
             throw new RuntimeException(e);
         }
 
-        printLines(out, annotation == null ? null : annotation.header());
+        if (annotation != null) {
+            for (String line : annotation.header()) out.println(line);
+        }
 
         String[] customSynopsis = annotation == null ? null : annotation.customSynopsis();
         if (customSynopsis != null && customSynopsis.length > 0) {
@@ -60,13 +62,16 @@ final class HelpRenderer {
 
         renderParametersAndOptions(model.parameters, model.options, showStandardHelpOptions, commandConfig, annotation, out, agentMode);
         renderSubcommands(cmd.getClass(), hasSubcommands, out);
-        renderFooter(annotation, out);
-    }
 
-    /** Print all lines; returns true if at least one line was printed. */
-    private static void printLines(PrintStream out, String[] lines) {
-        if (lines == null) return;
-        for (String line : lines) out.println(line);
+        // inline renderFooter
+        if (annotation != null) {
+            String footer = annotation.footer();
+            if (footer != null && !footer.isBlank()) {
+                out.println();
+                out.print(footer);
+                if (!footer.endsWith("\n") && !footer.endsWith("\r")) out.println();
+            }
+        }
     }
 
     static String stripLeadingDashes(String name) {
@@ -113,9 +118,7 @@ final class HelpRenderer {
         String label = param.param.paramLabel().isEmpty()
                 ? "<" + param.field.getName() + ">"
                 : param.param.paramLabel();
-        boolean isVarargs = param.indexRange[1] == -1
-                            || List.class.isAssignableFrom(param.field.getType())
-                            || param.field.getType().isArray();
+        boolean isVarargs = FemtoCli.isVarargsParam(param);
         if (isVarargs) {
             label = "[" + label + "...]";
         } else if (param.param.arity().startsWith("0")) {
@@ -167,7 +170,10 @@ final class HelpRenderer {
         optionEntries.sort(Comparator.comparing(e -> e.label.replaceFirst("^\\s*-+", "").toLowerCase()));
         entries.addAll(optionEntries);
 
-        int labelColumnWidth = Math.max(MIN_LABEL_WIDTH, entries.stream().mapToInt(e -> e.label.length()).max().orElse(MIN_LABEL_WIDTH));
+        int labelColumnWidth = MIN_LABEL_WIDTH;
+        for (HelpEntry entry : entries) {
+            if (entry.label.length() > labelColumnWidth) labelColumnWidth = entry.label.length();
+        }
         for (HelpEntry entry : entries) {
             printAlignedEntry(out, entry.label, entry.description, labelColumnWidth, entry.hasShortOption);
         }
@@ -175,12 +181,14 @@ final class HelpRenderer {
 
     private static String formatOptionNames(FemtoCli.OptionMeta opt, boolean agentMode) {
         String[] names = opt.opt.names();
-        String[] sorted = Arrays.copyOf(names, names.length);
-        Arrays.sort(sorted, Comparator.comparingInt(String::length));
-        if (agentMode) {
-            for (int i = 0; i < sorted.length; i++) sorted[i] = stripLeadingDashes(sorted[i]);
+        if (names.length > 1) {
+            names = Arrays.copyOf(names, names.length);
+            Arrays.sort(names, Comparator.comparingInt(String::length));
         }
-        String joined = String.join(", ", sorted);
+        if (agentMode) {
+            for (int i = 0; i < names.length; i++) names[i] = stripLeadingDashes(names[i]);
+        }
+        String joined = String.join(", ", names);
         return FemtoCli.isBooleanType(opt.field.getType()) ? joined : joined + "=" + getOptionParamLabel(opt);
     }
 
@@ -200,12 +208,10 @@ final class HelpRenderer {
     }
 
     private static String wrapTextBlock(String text, int maxWidth, int subsequentIndent) {
-        if (text == null || text.isEmpty() || maxWidth <= 0 || text.length() <= maxWidth) {
-            return text == null ? "" : text;
-        }
-        String indent = " ".repeat(Math.max(0, subsequentIndent));
+        if (text == null || text.length() <= maxWidth) return text == null ? "" : text;
         List<String> lines = wrapLines(text, maxWidth);
-        if (lines.isEmpty()) return "";
+        if (lines.size() <= 1) return lines.isEmpty() ? "" : lines.get(0);
+        String indent = " ".repeat(Math.max(0, subsequentIndent));
         StringBuilder sb = new StringBuilder(lines.get(0));
         for (int i = 1; i < lines.size(); i++) {
             sb.append("\n").append(indent).append(lines.get(i));
@@ -245,30 +251,45 @@ final class HelpRenderer {
     private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommands, PrintStream out) {
         if (!hasSubcommands) return;
 
-        List<String[]> entries = new ArrayList<>();
         Command annotation = cmdClass.getAnnotation(Command.class);
-        for (Class<?> subcommand : annotation.subcommands()) {
-            if (FemtoCli.isCommandRemoved(subcommand)) continue;
-            Command sub = subcommand.getAnnotation(Command.class);
-            if (sub != null && !sub.hidden()) {
-                entries.add(new String[]{sub.name(), sub.description().length > 0 ? sub.description()[0] : ""});
+        int maxNameLength = 0;
+
+        // First pass: compute max name length
+        if (annotation != null) {
+            for (Class<?> subcommand : annotation.subcommands()) {
+                if (FemtoCli.isCommandRemoved(subcommand)) continue;
+                Command sub = subcommand.getAnnotation(Command.class);
+                if (sub != null && !sub.hidden() && !sub.name().isEmpty()) {
+                    maxNameLength = Math.max(maxNameLength, sub.name().length());
+                }
             }
         }
         for (Method method : cmdClass.getDeclaredMethods()) {
             Command cmdAnnotation = method.getAnnotation(Command.class);
-            if (cmdAnnotation != null && !cmdAnnotation.hidden()) {
-                entries.add(new String[]{cmdAnnotation.name(), cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : ""});
+            if (cmdAnnotation != null && !cmdAnnotation.hidden() && !cmdAnnotation.name().isEmpty()) {
+                maxNameLength = Math.max(maxNameLength, cmdAnnotation.name().length());
             }
         }
-        if (entries.isEmpty()) return;
+        if (maxNameLength == 0) return;
 
         out.println("Commands:");
+        String fmt = "  %-" + (maxNameLength + 2) + "s%s%n";
 
-        int maxNameLength = 0;
-        for (String[] entry : entries) maxNameLength = Math.max(maxNameLength, entry[0].length());
-
-        for (String[] entry : entries) {
-            if (!entry[0].isEmpty()) out.printf("  %-" + (maxNameLength + 2) + "s%s%n", entry[0], entry[1]);
+        // Second pass: print
+        if (annotation != null) {
+            for (Class<?> subcommand : annotation.subcommands()) {
+                if (FemtoCli.isCommandRemoved(subcommand)) continue;
+                Command sub = subcommand.getAnnotation(Command.class);
+                if (sub != null && !sub.hidden() && !sub.name().isEmpty()) {
+                    out.printf(fmt, sub.name(), sub.description().length > 0 ? sub.description()[0] : "");
+                }
+            }
+        }
+        for (Method method : cmdClass.getDeclaredMethods()) {
+            Command cmdAnnotation = method.getAnnotation(Command.class);
+            if (cmdAnnotation != null && !cmdAnnotation.hidden() && !cmdAnnotation.name().isEmpty()) {
+                out.printf(fmt, cmdAnnotation.name(), cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : "");
+            }
         }
     }
 
@@ -285,36 +306,26 @@ final class HelpRenderer {
     }
 
     private static String expandCompletionCandidates(String description, Class<?> type, Option opt) {
-        int idx = 0;
         StringBuilder sb = new StringBuilder();
-
-        while (idx < description.length()) {
-            int start = description.indexOf("${COMPLETION-CANDIDATES", idx);
-            if (start == -1) {
-                sb.append(description.substring(idx));
-                break;
-            }
-
+        int idx = 0;
+        int start;
+        while ((start = description.indexOf("${COMPLETION-CANDIDATES", idx)) >= 0) {
             sb.append(description, idx, start);
-
             int end = description.indexOf("}", start);
             if (end == -1) {
-                sb.append(description.substring(start));
-                break;
+                sb.append(description, start, description.length());
+                return sb.toString();
             }
-
             String joiner = ", ";
             int colonIdx = description.indexOf(":", start);
             if (colonIdx != -1 && colonIdx < end) {
                 joiner = description.substring(colonIdx + 1, end)
                     .replace("\\n", "\n").replace("\\t", "\t");
             }
-
             sb.append(FemtoCli.enumCandidates(type, opt, joiner));
-
             idx = end + 1;
         }
-
+        sb.append(description, idx, description.length());
         return sb.toString();
     }
 
@@ -333,23 +344,12 @@ final class HelpRenderer {
         if (rendered.isBlank()) return description;
 
         boolean empty = description == null || description.isBlank();
-        if (opt.defaultValueOnNewLine() || commandConfig.effectiveDefaultValueOnNewLine()) {
+        if (opt.defaultValueOnNewLine() || commandConfig.defaultValueOnNewLine) {
             return empty ? rendered.stripLeading() : description + "\n" + rendered.stripLeading();
         }
         return empty ? rendered.stripLeading() : description + rendered;
     }
 
-    private static void renderFooter(Command annotation, PrintStream out) {
-        if (annotation == null) return;
-        String footer = annotation.footer();
-        if (footer == null || footer.isBlank()) return;
-
-        out.println();
-        out.print(footer);
-        if (!footer.endsWith("\n") && !footer.endsWith("\r")) {
-            out.println();
-        }
-    }
 
     private static boolean hasShortOption(String[] names) {
         for (String n : names)

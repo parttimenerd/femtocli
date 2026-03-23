@@ -89,7 +89,7 @@ public final class FemtoCli {
     }
 
     public static int run(Object root, String... args) {
-        return builder().run(root, args);
+        return run(root, System.out, System.err, args);
     }
 
     /**
@@ -164,7 +164,7 @@ public final class FemtoCli {
 
                 // This command has subcommands: parse its options, then look for subcommand
                 CommandModel model = CommandModel.of(cmd);
-                injectSpec(model, out, err, List.copyOf(commandPath), commandConfig, List.copyOf(commandChain));
+                injectSpec(model, out, err, commandPath, commandConfig, commandChain);
                 if (agentMode) {
                     normalizeBareOptionTokens(cmd, tokens, model);
                 }
@@ -178,9 +178,7 @@ public final class FemtoCli {
 
                 // After parsing options, check if there's a subcommand
                 if (tokens.isEmpty()) {
-                    if (!parentPositionals.isEmpty()) {
-                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
-                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     // No subcommand given - fall through to invoke this command
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     return invoke(cmd);
@@ -189,9 +187,7 @@ public final class FemtoCli {
                 // Check for help/version again after parsing options
                 hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
                 if (hvResult >= 0) {
-                    if (!parentPositionals.isEmpty()) {
-                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
-                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     return hvResult;
                 }
 
@@ -201,9 +197,7 @@ public final class FemtoCli {
                 Class<?> sub = findSubcommand(cmd.getClass(), next);
                 if (sub != null) {
                     tokens.removeFirst();
-                    if (!parentPositionals.isEmpty()) {
-                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
-                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     commandChain.add(cmd);
                     cmd = instantiateSubcommand(sub);
                     commandPath.add(commandName(cmd));
@@ -214,9 +208,7 @@ public final class FemtoCli {
                 Method method = findSubcommandMethod(cmd.getClass(), next);
                 if (method != null) {
                     tokens.removeFirst();
-                    if (!parentPositionals.isEmpty()) {
-                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
-                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     Command mc = method.getAnnotation(Command.class);
                     if (mc != null && !mc.name().isBlank()) {
                         commandPath.add(mc.name());
@@ -227,9 +219,7 @@ public final class FemtoCli {
 
                 // Bare "help" token in subcommand position → treat as --help
                 if ("help".equals(next)) {
-                    if (!parentPositionals.isEmpty()) {
-                        bindPositionals(cmd, parentPositionals, model.parameters, converters);
-                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     usage(cmd, out);
                     return commandConfig.helpExitCode;
@@ -240,18 +230,14 @@ public final class FemtoCli {
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
                 if (defaultSub != void.class && !isCommandRemoved(defaultSub)) {
                     // Put positionals back – they become positionals for the default subcommand
-                    for (int i = parentPositionals.size() - 1; i >= 0; i--) {
-                        tokens.addFirst(parentPositionals.get(i));
-                    }
+                    prependToDeque(parentPositionals, tokens);
                     commandChain.add(cmd);
                     cmd = instantiateSubcommand(defaultSub);
                     commandPath.add(commandName(cmd));
                     continue;
                 }
                 // Put positionals back for parseInto
-                for (int i = parentPositionals.size() - 1; i >= 0; i--) {
-                    tokens.addFirst(parentPositionals.get(i));
-                }
+                prependToDeque(parentPositionals, tokens);
                 break;
             }
 
@@ -259,7 +245,7 @@ public final class FemtoCli {
             setUsageCtx(commandPath, commandConfig, agentMode);
 
             CommandModel model = CommandModel.of(cmd);
-            injectSpec(model, out, err, List.copyOf(commandPath), commandConfig, List.copyOf(commandChain));
+            injectSpec(model, out, err, commandPath, commandConfig, commandChain);
 
             if (agentMode) {
                 normalizeBareOptionTokens(cmd, tokens, model);
@@ -290,17 +276,8 @@ public final class FemtoCli {
             err.println("Error: " + e.getMessage());
             return 1;
         } finally {
-            // restore previous context if any
-            if (previous == null) {
-                USAGE_CONTEXT.remove();
-            } else {
-                USAGE_CONTEXT.set(previous);
-            }
-            if (previousRemoved == null) {
-                REMOVED_COMMANDS.remove();
-            } else {
-                REMOVED_COMMANDS.set(previousRemoved);
-            }
+            if (previous == null) USAGE_CONTEXT.remove(); else USAGE_CONTEXT.set(previous);
+            if (previousRemoved == null) REMOVED_COMMANDS.remove(); else REMOVED_COMMANDS.set(previousRemoved);
         }
     }
 
@@ -312,24 +289,13 @@ public final class FemtoCli {
         tokens.addAll(normalized);
     }
 
-    private static String normalizeBareHelpOrVersionToken(String token) {
+    private static String normalizeBareOptionToken(Object cmdForErrors, String token, CommandModel model) throws UsageEx {
+        if (token == null || token.isEmpty() || token.startsWith("-")) {
+            return token;
+        }
+        // help/version as bare tokens
         if ("help".equals(token)) return "--help";
         if ("version".equals(token)) return "--version";
-        return token;
-    }
-
-    private static String normalizeBareOptionToken(Object cmdForErrors, String token, CommandModel model) throws UsageEx {
-        if (token == null || token.isEmpty()) {
-            return token;
-        }
-        if (token.startsWith("-")) {
-            return token;
-        }
-        // help/version as bare tokens (besides regular --help/-h and --version/-V)
-        token = normalizeBareHelpOrVersionToken(token);
-        if ("--help".equals(token) || "--version".equals(token)) {
-            return token;
-        }
 
         // Support bare boolean flags without '=' in agent mode, if unambiguous and boolean.
         // Example: "flag" is normalized to "--flag" if --flag is a known boolean option.
@@ -417,7 +383,11 @@ public final class FemtoCli {
     private static String peekNormalized(Deque<String> tokens, boolean agentMode) {
         if (tokens.isEmpty()) return null;
         String next = tokens.peekFirst();
-        return agentMode ? normalizeBareHelpOrVersionToken(next) : next;
+        if (agentMode) {
+            if ("help".equals(next)) return "--help";
+            if ("version".equals(next)) return "--version";
+        }
+        return next;
     }
 
     private static int checkHelpVersion(Deque<String> tokens, boolean agentMode,
@@ -548,14 +518,6 @@ public final class FemtoCli {
         throw new IllegalArgumentException("Converter method returned incompatible type for " + spec);
     }
 
-    private static void invokeSingleArgMethod(String spec, Object cmdForErrors, Object value) throws Exception {
-        Method m = resolveMethod(spec, cmdForErrors != null ? cmdForErrors.getClass() : null);
-        if (m.getParameterCount() != 1) {
-            throw new IllegalArgumentException("Verifier method must take a single argument: " + spec);
-        }
-        invokeResolvedMethod(m, cmdForErrors, "Verifier", spec, value);
-    }
-
     private static Object invokeResolvedMethod(Method m, Object instance, String kind, String spec, Object arg) throws Exception {
         boolean isStatic = java.lang.reflect.Modifier.isStatic(m.getModifiers());
         Object receiver = isStatic ? null : instance;
@@ -593,7 +555,11 @@ public final class FemtoCli {
             verifierClass.getDeclaredConstructor().newInstance().verify(value);
         }
         if (!verifierMethod.isBlank()) {
-            invokeSingleArgMethod(verifierMethod, cmdForErrors, value);
+            Method m = resolveMethod(verifierMethod, cmdForErrors != null ? cmdForErrors.getClass() : null);
+            if (m.getParameterCount() != 1) {
+                throw new IllegalArgumentException("Verifier method must take a single argument: " + verifierMethod);
+            }
+            invokeResolvedMethod(m, cmdForErrors, "Verifier", verifierMethod, value);
         }
     }
 
@@ -668,9 +634,7 @@ public final class FemtoCli {
                 values.add(value);
             }
         } else {
-            Object converted = convert(value, type, optMeta.field.getName(), opt, converters, cmd);
-            runVerifiers(cmd, converted, opt, null);
-            optMeta.field.set(optMeta.target, converted);
+            convertVerifyAndSet(cmd, optMeta.target, optMeta.field, value, opt, null, converters);
         }
     }
 
@@ -730,7 +694,7 @@ public final class FemtoCli {
 
             if (shouldApply) {
                 optMeta.field.set(optMeta.target,
-                        convert(opt.defaultValue(), field.getType(), field.getName(), opt, converters, model.cmd));
+                        convert(opt.defaultValue(), field.getType(), field.getName(), opt, null, converters, model.cmd));
                 seenFields.add(field);
             }
         }
@@ -738,10 +702,28 @@ public final class FemtoCli {
 
     private static void validateRequiredOptions(Object cmd, List<OptionMeta> options,
                                                 Set<Field> seenFields) throws UsageEx {
+        Map<String, OptionMeta> nameToMeta = new HashMap<>();
         for (OptionMeta optMeta : options) {
             Option opt = optMeta.opt;
             if (opt.required() && !seenFields.contains(optMeta.field)) {
                 throw new UsageEx(cmd, "Missing required option: " + preferredOptionName(opt));
+            }
+            if (opt != null) {
+                for (String name : opt.names()) nameToMeta.put(name, optMeta);
+            }
+        }
+        // Check prevents constraints for each seen option
+        for (OptionMeta optMeta : options) {
+            if (!seenFields.contains(optMeta.field) || optMeta.opt == null) continue;
+            String[] preventsNames = optMeta.opt.prevents();
+            if (preventsNames == null) continue;
+            for (String preventedName : preventsNames) {
+                OptionMeta preventedMeta = nameToMeta.get(preventedName);
+                if (preventedMeta != null && seenFields.contains(preventedMeta.field)) {
+                    throw new UsageEx(cmd,
+                            "Options " + preferredOptionName(optMeta.opt) + " and " + preventedName +
+                            " cannot be used together");
+                }
             }
         }
     }
@@ -804,13 +786,16 @@ public final class FemtoCli {
         for (ParamInfo paramInfo : paramInfos) {
             Field field = paramInfo.field;
             Parameters param = paramInfo.param;
-            int endIndex = paramInfo.indexRange[1]; // -1 = unbounded
 
-            boolean isVarargs = endIndex == -1
-                                || List.class.isAssignableFrom(field.getType())
-                                || field.getType().isArray();
+            boolean isVarargs = isVarargsParam(paramInfo);
 
-            int[] arity = determineArity(paramInfo, isVarargs);
+            int[] arityRange = paramInfo.arityRange;
+            int[] arity;
+            if (arityRange[0] == -2) {
+                arity = isVarargs ? new int[]{0, Integer.MAX_VALUE} : new int[]{1, 1};
+            } else {
+                arity = new int[]{arityRange[0], arityRange[1] == -1 ? Integer.MAX_VALUE : arityRange[1]};
+            }
 
             if (isVarargs) {
                 currentIndex = bindVarargsParam(cmd, field, positionals, currentIndex, arity, paramInfo, converters);
@@ -822,24 +807,12 @@ public final class FemtoCli {
         // Check for extra positionals
         if (currentIndex < positionals.size()) {
             ParamInfo lastParam = paramInfos.get(paramInfos.size() - 1);
-            boolean lastIsVarargs = lastParam.indexRange[1] == -1
-                                    || lastParam.field.getType().isArray()
-                                    || List.class.isAssignableFrom(lastParam.field.getType());
+            boolean lastIsVarargs = isVarargsParam(lastParam);
 
             if (!lastIsVarargs) {
                 throw new UsageEx(cmd, "Too many parameters");
             }
         }
-    }
-
-    private static int[] determineArity(ParamInfo paramInfo, boolean isVarargs) {
-        int[] arityRange = paramInfo.arityRange;
-
-        if (arityRange[0] == -2) {
-            return isVarargs ? new int[]{0, Integer.MAX_VALUE} : new int[]{1, 1};
-        }
-
-        return new int[]{arityRange[0], arityRange[1] == -1 ? Integer.MAX_VALUE : arityRange[1]};
     }
 
     private static int bindVarargsParam(Object cmd, Field field, List<String> positionals,
@@ -858,9 +831,7 @@ public final class FemtoCli {
         } else if (List.class.isAssignableFrom(field.getType())) {
             field.set(cmd, convertToList(values, field.getName(), null, paramInfo.param, converters, cmd));
         } else if (!values.isEmpty()) {
-            Object converted = convert(values.get(0), field.getType(), field.getName(), null, paramInfo.param, converters, cmd);
-            runVerifiers(cmd, converted, null, paramInfo.param);
-            field.set(cmd, converted);
+            convertVerifyAndSet(cmd, cmd, field, values.get(0), null, paramInfo.param, converters);
         }
 
         return startIndex + toConsume;
@@ -873,10 +844,7 @@ public final class FemtoCli {
         boolean isOptional = arity[0] == 0 || "0..1".equals(param.arity());
 
         if (currentIndex < positionals.size()) {
-            String value = positionals.get(currentIndex);
-            Object converted = convert(value, field.getType(), field.getName(), null, param, converters, cmd);
-            runVerifiers(cmd, converted, null, param);
-            field.set(cmd, converted);
+            convertVerifyAndSet(cmd, cmd, field, positionals.get(currentIndex), null, param, converters);
             return currentIndex + 1;
         }
 
@@ -885,9 +853,7 @@ public final class FemtoCli {
         }
 
         if (!param.defaultValue().equals(NO_DEFAULT_VALUE)) {
-            Object converted = convert(param.defaultValue(), field.getType(), field.getName(), null, param, converters, cmd);
-            runVerifiers(cmd, converted, null, param);
-            field.set(cmd, converted);
+            convertVerifyAndSet(cmd, cmd, field, param.defaultValue(), null, param, converters);
         }
 
         return currentIndex;
@@ -930,16 +896,15 @@ public final class FemtoCli {
         String num = s.substring(0, i).trim();
         String unit = s.substring(i).trim();
 
-        long nanosPerUnit = switch (unit) {
-            case "ns" -> 1L;
-            case "us" -> 1_000L;
-            case "ms" -> 1_000_000L;
-            case "s" -> 1_000_000_000L;
-            case "m" -> 60_000_000_000L;
-            case "h" -> 3_600_000_000_000L;
-            case "d" -> 86_400_000_000_000L;
-            default -> throw new IllegalArgumentException("Invalid duration unit: " + unit);
-        };
+        long nanosPerUnit;
+        if ("ns".equals(unit)) nanosPerUnit = 1L;
+        else if ("us".equals(unit)) nanosPerUnit = 1_000L;
+        else if ("ms".equals(unit)) nanosPerUnit = 1_000_000L;
+        else if ("s".equals(unit)) nanosPerUnit = 1_000_000_000L;
+        else if ("m".equals(unit)) nanosPerUnit = 60_000_000_000L;
+        else if ("h".equals(unit)) nanosPerUnit = 3_600_000_000_000L;
+        else if ("d".equals(unit)) nanosPerUnit = 86_400_000_000_000L;
+        else throw new IllegalArgumentException("Invalid duration unit: " + unit);
 
         return Duration.ofNanos(Math.round(Double.parseDouble(num) * nanosPerUnit));
     }
@@ -958,7 +923,7 @@ public final class FemtoCli {
 
     public static boolean hasSubcommands(Class<?> cmdClass) {
         Command ann = cmdClass.getAnnotation(Command.class);
-        if (ann != null && ann.subcommands().length > 0) {
+        if (ann != null) {
             for (Class<?> sub : ann.subcommands()) {
                 if (!isCommandRemoved(sub)) return true;
             }
@@ -979,9 +944,7 @@ public final class FemtoCli {
         List<String> consumed = new ArrayList<>();
         int fixedCount = 0;
         for (ParamInfo p : model.parameters) {
-            if (p.indexRange[1] != -1
-                    && !List.class.isAssignableFrom(p.field.getType())
-                    && !p.field.getType().isArray()) {
+            if (!isVarargsParam(p)) {
                 fixedCount++;
             }
         }
@@ -1060,14 +1023,6 @@ public final class FemtoCli {
         USAGE_CONTEXT.set(new UsageContext(List.copyOf(commandPath), commandConfig, agentMode));
     }
 
-    private static Object convert(String value,
-                                  Class<?> type,
-                                  String fieldName,
-                                  Option opt,
-                                  Map<Class<?>, TypeConverter<?>> converters,
-                                  Object cmdForErrors) throws UsageEx {
-        return convert(value, type, fieldName, opt, null, converters, cmdForErrors);
-    }
 
     private static Object convert(String value,
                                   Class<?> type,
@@ -1230,6 +1185,39 @@ public final class FemtoCli {
     private static boolean isPrimitiveWrapperAssignable(Class<?> targetType, Class<?> actualType) {
         return targetType != null && actualType != null
                 && actualType.equals(PRIMITIVE_TO_WRAPPER.get(targetType));
+    }
+
+    /** Returns true if the parameter field accepts multiple / varargs values. */
+    static boolean isVarargsParam(ParamInfo p) {
+        return p.indexRange[1] == -1
+                || List.class.isAssignableFrom(p.field.getType())
+                || p.field.getType().isArray();
+    }
+
+    /** Binds {@code positionals} only when the list is non-empty. */
+    private static void maybeBindPositionals(Object cmd, List<String> positionals,
+                                              CommandModel model,
+                                              Map<Class<?>, TypeConverter<?>> converters) throws Exception {
+        if (!positionals.isEmpty()) {
+            bindPositionals(cmd, positionals, model.parameters, converters);
+        }
+    }
+
+    /** Prepends each element of {@code positionals} back to the front of {@code tokens}
+     *  (in order, so the first element ends up at the head of the deque). */
+    private static void prependToDeque(List<String> positionals, Deque<String> tokens) {
+        for (int i = positionals.size() - 1; i >= 0; i--) {
+            tokens.addFirst(positionals.get(i));
+        }
+    }
+
+    /** Converts a raw string, runs verifiers, and assigns the result to a field. */
+    private static void convertVerifyAndSet(Object cmdForErrors, Object target, Field field,
+                                             String value, Option opt, Parameters param,
+                                             Map<Class<?>, TypeConverter<?>> converters) throws Exception {
+        Object converted = convert(value, field.getType(), field.getName(), opt, param, converters, cmdForErrors);
+        runVerifiers(cmdForErrors, converted, opt, param);
+        field.set(target, converted);
     }
 
     private static String findSimilarOption(String invalid, Set<String> validOptions) {

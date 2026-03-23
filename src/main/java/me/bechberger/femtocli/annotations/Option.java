@@ -132,4 +132,10 @@ public @interface Option {
      * <p>If false (default), only enum names are shown: {@code "value1, value2"}.
      */
     boolean showEnumDescriptions() default false;
+
+    /**
+     * Optional list of other option names that cannot be used together with this option.
+     * This is used for mutually exclusive options.
+     */
+    String[] prevents() default {};
 }

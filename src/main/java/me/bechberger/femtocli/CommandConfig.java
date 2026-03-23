@@ -61,11 +61,10 @@ public class CommandConfig {
 
     boolean effectiveShowDefaultValuesInHelp(Command cmd) {
         if (cmd == null) return showDefaultValuesInHelp;
-        return switch (cmd.showDefaultValuesInHelp()) {
-            case ENABLE -> true;
-            case DISABLE -> false;
-            case INHERIT -> showDefaultValuesInHelp;
-        };
+        var v = cmd.showDefaultValuesInHelp();
+        if (v == Command.ShowDefaultValuesInHelp.ENABLE) return true;
+        if (v == Command.ShowDefaultValuesInHelp.DISABLE) return false;
+        return showDefaultValuesInHelp;
     }
 
     String effectiveDefaultValueHelpTemplate() {
@@ -73,9 +72,6 @@ public class CommandConfig {
                 ? DEFAULT_TEMPLATE : defaultValueHelpTemplate;
     }
 
-    boolean effectiveDefaultValueOnNewLine() {
-        return defaultValueOnNewLine;
-    }
 
     String effectiveVersion(Command cmd) {
         if (cmd != null && !cmd.version().isBlank()) return cmd.version();

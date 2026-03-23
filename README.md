@@ -18,13 +18,14 @@ Features
 --------
 
 - Define commands with `@Command` (classes and subcommand methods)
-- Options via `@Option` (short/long names, required, default values, param labels, split, per-option converter)
+- Options via `@Option` (short/long names, required, default values, param labels, split, per-option converter, mutually exclusive)
 - Positional parameters via `@Parameters` (index, arity, paramLabel, defaultValue)
 - Mixins (reusable option groups) via `@Mixin`
 - Nested subcommands (classes and methods)
 - Default subcommand: automatically route to a subcommand when no subcommand name is given
 - Parent command access: subcommands can access ancestor commands and their parsed options via `Spec.getParent()`
 - Multi-value options: arrays and `List` (repeat option or use `split` delimiter)
+- Mutually exclusive options: define options that cannot be used together using `prevents()` attribute
 - Built-in type conversion for primitive types, `Path`, `Duration`, enums, and support for custom converters
 - Enum descriptions: show descriptive text for enum values in help with `showEnumDescriptions = true`
 - Automatic `-h/--help` and `-V/--version` flags
@@ -532,6 +533,120 @@ public class ArraysAndLists implements Runnable {
 xs=[a, b]
 ys=[c, d]
 rest=[rest1, rest2]
+```
+<!-- @femtocli:end -->
+
+### Mutually exclusive options [(source)](examples/src/main/java/me/bechberger/femtocli/examples/MutuallyExclusiveOptions.java)
+
+Use the `prevents()` annotation attribute to specify options that cannot be used together.
+When the user provides conflicting options, FemtoCli will display an error and exit with code 2.
+
+Note: The constraint is unidirectional. If option A prevents B, you don't need to specify that B prevents A - the constraint will be enforced from both sides when both options are present.
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/MutuallyExclusiveOptions.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+
+/**
+ * Example showing how to define mutually exclusive options using the {@code prevents()} annotation.
+ *
+ * <p>The {@code prevents()} field allows you to specify which other options cannot be used
+ * together with a given option. When the user provides conflicting options, FemtoCli will
+ * display an error and exit with code 2.
+ *
+ * <p>Note: The constraint is unidirectional. If option A prevents B, you don't need to
+ * specify that B prevents A - the constraint is automatically enforced when both are present.
+ * However, you may want to specify it both ways for clarity and to catch errors on both sides.
+ */
+@Command(name = "fileutil", description = "File utility with mutually exclusive options")
+public class MutuallyExclusiveOptions implements Runnable {
+
+    @Option(
+            names = {"-e", "--encrypt"},
+            description = "Encrypt the file (conflicts with --decrypt and --view)",
+            prevents = {"--decrypt", "-d", "--view", "-v"}
+    )
+    boolean encrypt;
+
+    @Option(
+            names = {"-d", "--decrypt"},
+            description = "Decrypt the file (conflicts with --encrypt and --view)",
+            prevents = {"--encrypt", "-e", "--view", "-v"}
+    )
+    boolean decrypt;
+
+    @Option(
+            names = {"-v", "--view"},
+            description = "View the file (conflicts with --encrypt and --decrypt)",
+            prevents = {"--encrypt", "-e", "--decrypt", "-d"}
+    )
+    boolean view;
+
+    @Option(
+            names = {"-q", "--quiet"},
+            description = "Suppress output",
+            prevents = {"-v", "--verbose"}
+    )
+    boolean quiet;
+
+    @Option(
+            names = "--verbose",
+            description = "Show verbose output (conflicts with --quiet)",
+            prevents = {"-q", "--quiet"}
+    )
+    boolean verbose;
+
+    @Option(
+            names = {"-f", "--file"},
+            description = "Path to the file to process",
+            required = true
+    )
+    String file;
+
+    @Override
+    public void run() {
+        if (encrypt) {
+            System.out.println("Encrypting " + file);
+        } else if (decrypt) {
+            System.out.println("Decrypting " + file);
+        } else if (view) {
+            System.out.println("Viewing " + file);
+        }
+
+        if (verbose) {
+            System.out.println("Verbose mode enabled");
+        }
+        if (quiet) {
+            System.out.println("Running in quiet mode");
+        }
+    }
+
+    public static void main(String[] args) {
+        FemtoCli.run(new MutuallyExclusiveOptions(), args);
+    }
+}
+```
+<!-- @femtocli:end -->
+
+Try it:
+
+<!-- @femtocli:run-java class="MutuallyExclusiveOptions" args=["-f","test.txt","-e"] -->
+```sh
+> ./examples/run.sh MutuallyExclusiveOptions -f test.txt -e
+Encrypting test.txt
+```
+<!-- @femtocli:end -->
+
+Error when using conflicting options:
+
+<!-- @femtocli:run-java class="MutuallyExclusiveOptions" args=["-f","test.txt","-e","-d"] -->
+```sh
+> ./examples/run.sh MutuallyExclusiveOptions -f test.txt -e -d
+Error: Options -e and -d cannot be used together
 ```
 <!-- @femtocli:end -->
 

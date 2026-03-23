@@ -35,7 +35,7 @@ class DidYouMeanTest {
                 Usage: test [-hV] [--verbose]
                   -h, --help       Show this help message and exit.
                   -V, --version    Print version information and exit.
-                      --verbose         
+                      --verbose
                 """, res.err());
     }
 }

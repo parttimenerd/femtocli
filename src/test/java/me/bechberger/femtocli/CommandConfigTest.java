@@ -5,7 +5,7 @@ import me.bechberger.femtocli.annotations.Option;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for CommandConfig settings like helpExitCode and usageErrorsToStdout.
@@ -53,7 +53,7 @@ class CommandConfigTest {
     @Test
     void usageErrorsGoToStderrByDefault() {
         var config = new CommandConfig();
-        assertEquals(false, config.usageErrorsToStdout);
+        assertFalse(config.usageErrorsToStdout);
 
         TestCmd cmd = new TestCmd();
         RunResult res = FemtoCli.builder()
@@ -119,9 +119,9 @@ class CommandConfigTest {
         var copy = config.copy();
 
         assertEquals("1.0.0", copy.version);
-        assertEquals(false, copy.suggestSimilarOptions);
+        assertFalse(copy.suggestSimilarOptions);
         assertEquals(5, copy.helpExitCode);
-        assertEquals(true, copy.usageErrorsToStdout);
-        assertEquals(true, copy.emptyLineAfterUsage);
+        assertTrue(copy.usageErrorsToStdout);
+        assertTrue(copy.emptyLineAfterUsage);
     }
 }

@@ -72,21 +72,17 @@ final class CommandModel {
         }
     }
 
-    private static boolean matchesIgnoreRule(String rule, Field field, Option opt) {
-        if (rule == null || rule.isBlank()) return false;
-        if (rule.startsWith("field:")) {
-            return field.getName().equals(rule.substring("field:".length()));
-        }
-        for (String n : opt.names()) {
-            if (n.equals(rule)) return true;
-        }
-        return false;
-    }
-
     private static boolean matchesAnyRule(String[] rules, Field field, Option opt) {
         if (rules == null) return false;
         for (String rule : rules) {
-            if (matchesIgnoreRule(rule, field, opt)) return true;
+            if (rule == null || rule.isBlank()) continue;
+            if (rule.startsWith("field:")) {
+                if (field.getName().equals(rule.substring(6))) return true;
+            } else {
+                for (String n : opt.names()) {
+                    if (n.equals(rule)) return true;
+                }
+            }
         }
         return false;
     }
@@ -144,21 +140,6 @@ final class CommandModel {
     }
 
 
-    private static void validateNoAmbiguousBareOptionNames(Map<String, Map<Field, List<String>>> namesByBareAndField) {
-        for (var e : namesByBareAndField.entrySet()) {
-            String bare = e.getKey();
-            Map<Field, List<String>> byField = e.getValue();
-            if (byField.size() > 1) {
-                List<String> names = new ArrayList<>();
-                for (List<String> ns : byField.values()) {
-                    names.addAll(ns);
-                }
-                throw new IllegalArgumentException(
-                        "Ambiguous option name '" + bare + "' (use distinct names): " + String.join(", ", names));
-            }
-        }
-    }
-
     static CommandModel of(Object cmd) throws Exception {
         initializeMixins(cmd);
 
@@ -178,7 +159,14 @@ final class CommandModel {
         collectOptionsFrom(cmd, optionsByName, optionByField, options, namesByBareAndField);
 
         // Fail early if agent-mode bare option normalization would be ambiguous.
-        validateNoAmbiguousBareOptionNames(namesByBareAndField);
+        for (var e : namesByBareAndField.entrySet()) {
+            if (e.getValue().size() > 1) {
+                List<String> names = new ArrayList<>();
+                for (List<String> ns : e.getValue().values()) names.addAll(ns);
+                throw new IllegalArgumentException(
+                        "Ambiguous option name '" + e.getKey() + "' (use distinct names): " + String.join(", ", names));
+            }
+        }
 
         List<FemtoCli.ParamInfo> params = new ArrayList<>();
         for (Field f : FemtoCli.allFields(cmd.getClass())) {

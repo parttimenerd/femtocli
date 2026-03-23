@@ -48,14 +48,10 @@ public final class Spec {
      */
     @SuppressWarnings("unchecked")
     public <T> T getParent(Class<T> type) {
-        if (type == null) {
-            return null;
-        }
-        // Search backwards through the chain to find the first match
+        if (type == null) return null;
         for (int i = commandChain.size() - 1; i >= 0; i--) {
-            Object cmd = commandChain.get(i);
-            if (type.isInstance(cmd)) {
-                return (T) cmd;
+            if (type.isInstance(commandChain.get(i))) {
+                return (T) commandChain.get(i);
             }
         }
         return null;
@@ -68,7 +64,7 @@ public final class Spec {
     public List<String> commandPath() { return commandPath; }
 
     /** The effective CommandConfig used for this execution (defensive copy). */
-    public CommandConfig commandConfig() { return commandConfig.copy(); }
+    public CommandConfig commandConfig() { return commandConfig; }
 
     /** Print usage for the current command to the configured output stream. */
     public void usage() {

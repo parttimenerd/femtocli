@@ -41,7 +41,7 @@ public class BooleanOptionConverterTest {
         Cmd cmd = new Cmd();
         RunResult res = FemtoCli.builder().runCaptured(cmd, "--turn", "off");
         assertEquals(0, res.exitCode(), res.err());
-        assertTrue(Boolean.FALSE.equals(cmd.turn));
+        assertEquals(Boolean.FALSE, cmd.turn);
     }
 
     @Test
