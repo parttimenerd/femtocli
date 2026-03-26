@@ -141,6 +141,15 @@ public final class FemtoCli {
         if (root instanceof String) {
             throw new IllegalArgumentException("Root command cannot be a String (got " + root + ").");
         }
+        if (root instanceof Class<?> clazz) {
+            try {
+                var ctor = clazz.getDeclaredConstructor();
+                ctor.setAccessible(true);
+                root = ctor.newInstance();
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Cannot instantiate root command class: " + clazz.getName(), e);
+            }
+        }
         UsageContext previous = USAGE_CONTEXT.get();
         Set<Class<?>> previousRemoved = REMOVED_COMMANDS.get();
         try {
@@ -1133,9 +1142,11 @@ public final class FemtoCli {
                                    List<Object> commandChain) throws Exception {
         Spec spec = new Spec(model.cmd, out, err, commandPath, commandConfig, commandChain);
         for (Field f : allFields(model.cmd.getClass())) {
-            f.setAccessible(true);
-            if (Spec.class.isAssignableFrom(f.getType()) && f.get(model.cmd) == null) {
-                f.set(model.cmd, spec);
+            if (Spec.class.isAssignableFrom(f.getType())) {
+                f.setAccessible(true);
+                if (f.get(model.cmd) == null) {
+                    f.set(model.cmd, spec);
+                }
             }
         }
     }

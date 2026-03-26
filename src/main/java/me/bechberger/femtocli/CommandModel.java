@@ -111,9 +111,9 @@ final class CommandModel {
                                           List<FemtoCli.OptionMeta> options,
                                           Map<String, Map<Field, List<String>>> namesByBareAndField) {
         for (Field field : declaredIn.getDeclaredFields()) {
-            field.setAccessible(true);
             Option opt = field.getAnnotation(Option.class);
             if (opt == null) continue;
+            field.setAccessible(true);
             if (Modifier.isFinal(field.getModifiers())) {
                 throw new FieldIsFinalException("@Option field must not be final: " + field);
             }
@@ -151,9 +151,11 @@ final class CommandModel {
 
         // Collect mixin options first, then command options (so command overrides same-name options)
         for (Field field : FemtoCli.allFields(cmd.getClass())) {
-            field.setAccessible(true);
-            if (field.getAnnotation(Mixin.class) != null && field.get(cmd) != null) {
-                collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options, namesByBareAndField);
+            if (field.getAnnotation(Mixin.class) != null) {
+                field.setAccessible(true);
+                if (field.get(cmd) != null) {
+                    collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options, namesByBareAndField);
+                }
             }
         }
         collectOptionsFrom(cmd, optionsByName, optionByField, options, namesByBareAndField);
