@@ -14,10 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.3.7] - 2026-03-26
+
+### Fixed
+- Issue with reflection and setAccessible on non-annotated fields
+
 ## [0.3.6] - 2026-03-23
 
 ### Added
 - Add mutually exclusive options using {@link Option#prevents()}
+
 ## [0.3.5] - 2026-03-18
 
 ### Added
