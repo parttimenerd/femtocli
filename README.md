@@ -106,7 +106,7 @@ Add the library as a dependency in your project (< 60KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli</artifactId>
-  <version>0.3.8</version>
+  <version>0.3.9</version>
 </dependency>
 ```
 
@@ -116,7 +116,7 @@ And for the minimal version without debug metadata (< 45KB):
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli-minimal</artifactId>
-  <version>0.3.8</version>
+  <version>0.3.9</version>
 </dependency>
 ```
 
