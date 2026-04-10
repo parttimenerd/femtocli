@@ -19,6 +19,10 @@ final class CommandModel {
     final List<FemtoCli.ParamInfo> parameters;
     /** Populated by FemtoCli.parseOptions() for later required-option validation. */
     Set<Field> seenFields;
+    /** Fields explicitly provided by the user (before default values are applied). */
+    Set<Field> userProvidedFields;
+    /** Set to true by FemtoCli.parseOptions() when a '--' end-of-options marker is consumed. */
+    boolean endOfOptionsSeen;
 
     private CommandModel(Object cmd,
                          Map<String, FemtoCli.OptionMeta> optionsByName,
@@ -171,18 +175,33 @@ final class CommandModel {
         }
 
         List<FemtoCli.ParamInfo> params = new ArrayList<>();
-        for (Field f : FemtoCli.allFields(cmd.getClass())) {
+        // Collect @Parameters from mixin objects first
+        for (Field field : FemtoCli.allFields(cmd.getClass())) {
+            if (field.getAnnotation(Mixin.class) != null) {
+                field.setAccessible(true);
+                Object mixin = field.get(cmd);
+                if (mixin != null) {
+                    collectParameters(mixin, mixin, params);
+                }
+            }
+        }
+        // Then collect @Parameters from command itself
+        collectParameters(cmd, cmd, params);
+        params.sort((a, b) -> Integer.compare(a.indexRange[0], b.indexRange[0]));
+
+        return new CommandModel(cmd, optionsByName, optionByField, options, params);
+    }
+
+    private static void collectParameters(Object holder, Object target, List<FemtoCli.ParamInfo> params) {
+        for (Field f : FemtoCli.allFields(holder.getClass())) {
             Parameters p = f.getAnnotation(Parameters.class);
             if (p != null) {
                 if (Modifier.isFinal(f.getModifiers())) {
                     throw new FieldIsFinalException("@Parameters field must not be final: " + f);
                 }
                 f.setAccessible(true);
-                params.add(new FemtoCli.ParamInfo(f, p, FemtoCli.parseRange(p.index()), FemtoCli.parseRange(p.arity())));
+                params.add(new FemtoCli.ParamInfo(f, target, p, FemtoCli.parseRange(p.index()), FemtoCli.parseRange(p.arity())));
             }
         }
-        params.sort(Comparator.comparingInt(pi -> pi.indexRange[0]));
-
-        return new CommandModel(cmd, optionsByName, optionByField, options, params);
     }
 }

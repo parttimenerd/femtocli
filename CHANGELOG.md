@@ -7,12 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-### Changed
-### Deprecated
-### Removed
 ### Fixed
-### Security
+- Collection-typed options ignore the type information and always result in getting passed as String #3
+- split fails when used in combination with defaultValue #2
+- and many more
 
 ## [0.3.8] - 2026-03-26
 

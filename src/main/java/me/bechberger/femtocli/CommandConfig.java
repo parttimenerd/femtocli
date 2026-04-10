@@ -9,7 +9,7 @@ import me.bechberger.femtocli.annotations.Command;
  */
 public class CommandConfig {
     public static final String DEFAULT_TEMPLATE = " (default ${DEFAULT-VALUE})";
-    public static final String DEFAULT_SUGGESTION_TEMPLATE = "\n  tip: a similar argument exists: '${SUGGESTION}'";
+    public static final String DEFAULT_SUGGESTION_TEMPLATE = "  tip: a similar argument exists: '${SUGGESTION}'";
 
     public boolean emptyLineAfterUsage;
     public boolean emptyLineAfterDescription;

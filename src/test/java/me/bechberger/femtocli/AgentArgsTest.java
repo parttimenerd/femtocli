@@ -225,9 +225,9 @@ class AgentArgsTest {
     }
 
     @Test
-    void toArgv_singleQuotesAllowSpacesButWhitespaceStillTrimmed() {
+    void toArgv_singleQuotesPreserveWhitespace() {
         String[] argv = AgentArgs.toArgv("'  hello  '");
-        assertThat(argv).containsExactly("hello");
+        assertThat(argv).containsExactly("  hello  ");
     }
 
     @Test
@@ -477,5 +477,24 @@ class AgentArgsTest {
                   V, version      Print version information and exit.
                   x=<x>           X
                 """.trim());
+    }
+
+    @Test
+    void toArgv_singleQuotedSpaceOnlyTokenPreserved() {
+        String[] argv = AgentArgs.toArgv("' '");
+        assertThat(argv).containsExactly(" ");
+    }
+
+    @Test
+    void toArgv_singleQuotedLeadingTrailingWhitespacePreserved() {
+        String[] argv = AgentArgs.toArgv("'  hello  '");
+        assertThat(argv).containsExactly("  hello  ");
+    }
+
+    @Test
+    void toArgv_mixedQuotedAndUnquotedTrimsOnlyUnquoted() {
+        // Outside-quote spaces trimmed, inside-quote spaces preserved
+        String[] argv = AgentArgs.toArgv("  ' x '  ");
+        assertThat(argv).containsExactly(" x ");
     }
 }

@@ -34,6 +34,9 @@ final class AgentArgs {
         StringBuilder cur = new StringBuilder();
         boolean escaping = false;
         boolean inSingleQuotes = false;
+        // Track character positions that are "protected" (from quotes or escapes)
+        // so that trimming only affects unprotected leading/trailing whitespace.
+        List<Boolean> protectedChars = new ArrayList<>();
 
         for (int i = 0; i < agentArgs.length(); i++) {
             char c = agentArgs.charAt(i);
@@ -42,6 +45,7 @@ final class AgentArgs {
                 // Only a small escape set is supported.
                 if (c == '\\' || c == ',' || c == '=') {
                     cur.append(c);
+                    protectedChars.add(true);
                 } else {
                     throw new IllegalArgumentException("Invalid escape sequence: \\" + c + " at index " + i);
                 }
@@ -60,12 +64,14 @@ final class AgentArgs {
             }
 
             if (!inSingleQuotes && c == ',') {
-                addToken(out, cur);
+                addToken(out, cur, protectedChars);
                 cur.setLength(0);
+                protectedChars.clear();
                 continue;
             }
 
             cur.append(c);
+            protectedChars.add(inSingleQuotes);
         }
 
         if (escaping) {
@@ -74,13 +80,25 @@ final class AgentArgs {
         if (inSingleQuotes) {
             throw new IllegalArgumentException("Unterminated single quote in agent args");
         }
-        addToken(out, cur);
+        addToken(out, cur, protectedChars);
 
         return out.toArray(String[]::new);
     }
 
-    private static void addToken(List<String> out, StringBuilder cur) {
-        String token = cur.toString().trim();
+    private static void addToken(List<String> out, StringBuilder cur, List<Boolean> protectedChars) {
+        String raw = cur.toString();
+        // Trim only unprotected leading/trailing whitespace
+        int start = 0;
+        while (start < raw.length() && Character.isWhitespace(raw.charAt(start))
+                && !protectedChars.get(start)) {
+            start++;
+        }
+        int end = raw.length();
+        while (end > start && Character.isWhitespace(raw.charAt(end - 1))
+                && !protectedChars.get(end - 1)) {
+            end--;
+        }
+        String token = raw.substring(start, end);
         if (token.isEmpty()) {
             throw new IllegalArgumentException("Empty token in agent args (did you use ',,' or a trailing comma?)");
         }

@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -290,6 +291,17 @@ class FemtoCliTest {
         }
     }
 
+    @Command(name = "int-varargs", description = "Test integer varargs parameters", mixinStandardHelpOptions = true)
+    static class IntVarargsCmd implements Callable<Integer> {
+        @Parameters(index = "0..*", description = "Multiple integer values")
+        List<Integer> values;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
     @Command(name = "optional", description = "Test optional parameter", mixinStandardHelpOptions = true)
     static class OptionalParamCmd implements Callable<Integer> {
         @Parameters(arity = "0..1", description = "Optional value")
@@ -324,6 +336,166 @@ class FemtoCliTest {
         public Integer call() {
             return 0;
         }
+    }
+
+    @Command(name = "int-list", description = "Test integer list option", mixinStandardHelpOptions = true)
+    static class IntListOptionCmd implements Callable<Integer> {
+        @Option(names = "-n", description = "Integer list")
+        List<Integer> numbers;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    @Command(name = "default-int-list", description = "Test integer list defaults", mixinStandardHelpOptions = true)
+    static class DefaultIntListOptionCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "1,2")
+        List<Integer> xs;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    @Command(name = "invalid-default-int-list", description = "Test invalid integer list defaults", mixinStandardHelpOptions = true)
+    static class InvalidDefaultIntListOptionCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "x")
+        List<Integer> xs;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    @Command(name = "default-string-list", description = "Test string list defaults", mixinStandardHelpOptions = true)
+    static class DefaultStringListOptionCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "a,b,c")
+        List<String> xs;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    // ---- Array option commands (analogous to the List<Integer> bug) ----
+
+    @Command(name = "int-array-split", description = "Integer array with split", mixinStandardHelpOptions = true)
+    static class IntArraySplitCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",")
+        Integer[] xs;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "int-array-default", description = "Integer array with split and default", mixinStandardHelpOptions = true)
+    static class DefaultIntArrayCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "10,20,30")
+        Integer[] xs;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "prim-int-array-default", description = "Primitive int array with default", mixinStandardHelpOptions = true)
+    static class DefaultPrimIntArrayCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "4,5,6")
+        int[] xs;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "invalid-default-int-array", description = "Invalid int array default", mixinStandardHelpOptions = true)
+    static class InvalidDefaultIntArrayCmd implements Callable<Integer> {
+        @Option(names = "--xs", split = ",", defaultValue = "x,y")
+        Integer[] xs;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "string-array-split", description = "String array with split and default", mixinStandardHelpOptions = true)
+    static class DefaultStringArrayCmd implements Callable<Integer> {
+        @Option(names = "--tags", split = ",", defaultValue = "a,b,c")
+        String[] tags;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    // ---- List options with other element types ----
+
+    @Command(name = "double-list", description = "Double list option", mixinStandardHelpOptions = true)
+    static class DoubleListOptionCmd implements Callable<Integer> {
+        @Option(names = "-d", description = "Double list")
+        List<Double> values;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "long-list-default", description = "Long list with default", mixinStandardHelpOptions = true)
+    static class DefaultLongListCmd implements Callable<Integer> {
+        @Option(names = "--ids", split = ",", defaultValue = "100,200,300")
+        List<Long> ids;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "path-list", description = "Path list option", mixinStandardHelpOptions = true)
+    static class PathListOptionCmd implements Callable<Integer> {
+        @Option(names = "-f", description = "File list")
+        List<Path> files;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    // ---- Enum in collections ----
+
+    @Command(name = "color-list", description = "Color list option", mixinStandardHelpOptions = true)
+    static class ColorListOptionCmd implements Callable<Integer> {
+        @Option(names = "--color", description = "Color list")
+        List<Color> colors;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "color-list-default", description = "Color list with default", mixinStandardHelpOptions = true)
+    static class DefaultColorListCmd implements Callable<Integer> {
+        @Option(names = "--colors", split = ",", defaultValue = "RED,GREEN")
+        List<Color> colors;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    // ---- Array positional parameters ----
+
+    @Command(name = "int-array-params", description = "Integer array positional", mixinStandardHelpOptions = true)
+    static class IntArrayParamsCmd implements Callable<Integer> {
+        @Parameters(index = "0..*", description = "Integer values")
+        Integer[] values;
+
+        @Override
+        public Integer call() { return 0; }
+    }
+
+    @Command(name = "double-array-params", description = "Double array positional", mixinStandardHelpOptions = true)
+    static class DoubleArrayParamsCmd implements Callable<Integer> {
+        @Parameters(index = "0..*", description = "Double values")
+        double[] values;
+
+        @Override
+        public Integer call() { return 0; }
     }
 
     @Command(name = "callable-ret", description = "Return codes", mixinStandardHelpOptions = true)
@@ -679,6 +851,137 @@ class FemtoCliTest {
         assertThat(cmd.boxedBool).isTrue();
     }
 
+    @Test
+    void integerListOptionParsesElementsUsingGenericType() {
+        IntListOptionCmd cmd = new IntListOptionCmd();
+
+        var res = run(cmd, "-n", "1", "-n", "-2", "-n", "3");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.numbers).containsExactly(1, -2, 3);
+    }
+
+    @Test
+    void integerListDefaultParsesElementsUsingGenericType() {
+        DefaultIntListOptionCmd cmd = new DefaultIntListOptionCmd();
+
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(1, 2);
+    }
+
+    @Test
+    void invalidIntegerListDefaultReportsValueErrorInsteadOfUnsupportedType() {
+        var res = run(new InvalidDefaultIntListOptionCmd());
+
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Invalid value for --xs");
+        assertThat(res.err()).doesNotContain("Unsupported field type: java.util.List");
+    }
+
+    // ========== Array option variants (similar bug pattern) ==========
+
+    @Test
+    void integerArrayWithSplitParsesElements() {
+        IntArraySplitCmd cmd = new IntArraySplitCmd();
+        var res = run(cmd, "--xs=1,2,3");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void integerArrayDefaultParsesElements() {
+        DefaultIntArrayCmd cmd = new DefaultIntArrayCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(10, 20, 30);
+    }
+
+    @Test
+    void primitiveIntArrayDefaultParsesElements() {
+        DefaultPrimIntArrayCmd cmd = new DefaultPrimIntArrayCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(4, 5, 6);
+    }
+
+    @Test
+    void invalidIntegerArrayDefaultReportsValueError() {
+        var res = run(new InvalidDefaultIntArrayCmd());
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Invalid value for --xs");
+        assertThat(res.err()).doesNotContain("Unsupported field type");
+    }
+
+    @Test
+    void stringArrayWithSplitAndDefaultWorks() {
+        DefaultStringArrayCmd cmd = new DefaultStringArrayCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.tags).containsExactly("a", "b", "c");
+    }
+
+    // ========== Other List element types ==========
+
+    @Test
+    void doubleListOptionParsesElements() {
+        DoubleListOptionCmd cmd = new DoubleListOptionCmd();
+        var res = run(cmd, "-d", "1.5", "-d", "2.7", "-d", "3.14");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.values).containsExactly(1.5, 2.7, 3.14);
+    }
+
+    @Test
+    void longListDefaultParsesElements() {
+        DefaultLongListCmd cmd = new DefaultLongListCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.ids).containsExactly(100L, 200L, 300L);
+    }
+
+    @Test
+    void pathListOptionParsesElements() {
+        PathListOptionCmd cmd = new PathListOptionCmd();
+        var res = run(cmd, "-f", "/tmp/a.txt", "-f", "/tmp/b.txt");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.files).containsExactly(Path.of("/tmp/a.txt"), Path.of("/tmp/b.txt"));
+    }
+
+    // ========== Enum in collections ==========
+
+    @Test
+    void colorListOptionParsesElements() {
+        ColorListOptionCmd cmd = new ColorListOptionCmd();
+        var res = run(cmd, "--color", "red", "--color", "blue");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.colors).containsExactly(Color.RED, Color.BLUE);
+    }
+
+    @Test
+    void colorListDefaultParsesElements() {
+        DefaultColorListCmd cmd = new DefaultColorListCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.colors).containsExactly(Color.RED, Color.GREEN);
+    }
+
+    // ========== Array positional parameters ==========
+
+    @Test
+    void integerArrayPositionalParsesElements() {
+        IntArrayParamsCmd cmd = new IntArrayParamsCmd();
+        var res = run(cmd, "--", "10", "-5", "99");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.values).containsExactly(10, -5, 99);
+    }
+
+    @Test
+    void doubleArrayPositionalParsesElements() {
+        DoubleArrayParamsCmd cmd = new DoubleArrayParamsCmd();
+        var res = run(cmd, "1.1", "2.2", "3.3");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.values).containsExactly(1.1, 2.2, 3.3);
+    }
+
     // ========== Short option tests ==========
 
     @Test
@@ -756,6 +1059,14 @@ class FemtoCliTest {
         var res = run(cmd, "a", "b", "c", "d");
         assertEquals(0, res.exitCode());
         assertThat(cmd.values).containsExactly("a", "b", "c", "d");
+    }
+
+    @Test
+    void integerVarargsParseElementsUsingGenericType() {
+        IntVarargsCmd cmd = new IntVarargsCmd();
+        var res = run(cmd, "--", "1", "-2", "3");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.values).containsExactly(1, -2, 3);
     }
 
     // ========== Optional parameter tests ==========
@@ -1302,13 +1613,20 @@ class FemtoCliTest {
     }
 
     @Test
-    void booleanWithInvalidValueIsFalse() {
-        // Boolean.parseBoolean returns false for any non-"true" string
+    void booleanWithYesValueIsTrue() {
+        // "yes" is now accepted as a truthy boolean value (along with "on", "1")
         TypesCmd cmd = new TypesCmd();
         var res = run(cmd, "--bool=yes");
         assertEquals(0, res.exitCode());
-        // "yes" is not "true", so Boolean.parseBoolean returns false
-        assertThat(cmd.boolVal).isFalse();
+        assertThat(cmd.boolVal).isTrue();
+    }
+
+    @Test
+    void booleanWithInvalidValueIsRejected() {
+        // Invalid boolean values like "maybe" now produce an error instead of silently returning false
+        var res = run(new TypesCmd(), "--bool=maybe");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Invalid value");
     }
 
     // ========== Double equals sign edge cases ==========
@@ -2493,6 +2811,621 @@ class FemtoCliTest {
         RunResult res = FemtoCli.builder().runCaptured(root);
         assertEquals(0, res.exitCode(), res.err());
         assertThat(res.out().trim()).isEqualTo("root");
+    }
+
+    // ========== Bug: parent option with defaultValue overwritten on subcommand fallthrough ==========
+
+    @Command(name = "action", description = "Do something")
+    static class FallthroughAction implements Callable<Integer> {
+        @Parameters(description = "target file")
+        String file;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
+    @Command(
+            name = "tool",
+            subcommands = {FallthroughAction.class},
+            mixinStandardHelpOptions = true
+    )
+    static class ParentWithDefaultAndSubcmds implements Runnable {
+        @Option(names = "--lang", defaultValue = "en")
+        String lang;
+
+        @Parameters(index = "0..*")
+        List<String> files;
+
+        @Override
+        public void run() {
+            System.out.println("lang=" + lang);
+        }
+    }
+
+    @Test
+    void parentOptionWithDefaultValueNotOverwrittenOnSubcommandFallthrough() {
+        // When a parent command has subcommands but falls through as the final command,
+        // options set in the first parse pass must not be overwritten by applyDefaultValues.
+        var root = new ParentWithDefaultAndSubcmds();
+        RunResult res = FemtoCli.builder().runCaptured(root, "--lang=de", "file.txt");
+        assertEquals(0, res.exitCode(), res.err());
+        // BUG: without fix, lang is overwritten to "en" by the second applyDefaultValues pass
+        assertEquals("de", root.lang);
+    }
+
+    @Test
+    void parentOptionDefaultStillAppliedWhenNotProvided() {
+        var root = new ParentWithDefaultAndSubcmds();
+        RunResult res = FemtoCli.builder().runCaptured(root, "file.txt");
+        assertEquals(0, res.exitCode(), res.err());
+        assertEquals("en", root.lang);
+    }
+
+    // ========== Bug: µs duration literal not accepted ==========
+
+    @Test
+    void durationParsesUnicodeMicroSeconds() {
+        // parseDuration scanner recognizes µ as a unit start but the unit lookup
+        // only accepts "us", not "µs" — this should work
+        Duration d = FemtoCli.parseDuration("500µs");
+        assertEquals(Duration.ofNanos(500_000), d);
+    }
+
+    @Test
+    void durationParsesAsciiMicroSeconds() {
+        Duration d = FemtoCli.parseDuration("500us");
+        assertEquals(Duration.ofNanos(500_000), d);
+    }
+
+    // ========== Edge case: float type ==========
+
+    @Test
+    void floatOptionParsesCorrectly() {
+        @Command(name = "float-cmd", mixinStandardHelpOptions = true)
+        class FloatCmd implements Callable<Integer> {
+            @Option(names = "--val") float val;
+            @Option(names = "--boxed") Float boxed;
+            @Override public Integer call() { return 0; }
+        }
+        FloatCmd cmd = new FloatCmd();
+        var res = run(cmd, "--val", "3.14", "--boxed", "2.71");
+        assertEquals(0, res.exitCode());
+        assertEquals(3.14f, cmd.val, 0.001f);
+        assertEquals(2.71f, cmd.boxed, 0.001f);
+    }
+
+    @Test
+    void floatOverflowReturns2() {
+        @Command(name = "float-cmd", mixinStandardHelpOptions = true)
+        class FloatCmd implements Callable<Integer> {
+            @Option(names = "--val") int val;
+            @Override public Integer call() { return 0; }
+        }
+        // float overflow won't error (it becomes Infinity), but int overflow should
+        var res = run(new FloatCmd(), "--val", "99999999999999999999");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Invalid value");
+    }
+
+    // ========== Edge case: split + repeated flags accumulate ==========
+
+    @Test
+    void splitAndRepeatedFlagsAccumulate() {
+        IntArraySplitCmd cmd = new IntArraySplitCmd();
+        var res = run(cmd, "--xs=1,2", "--xs=3,4");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
+    void splitListAndRepeatedAccumulate() {
+        @Command(name = "accum", mixinStandardHelpOptions = true)
+        class AccumCmd implements Callable<Integer> {
+            @Option(names = "--tags", split = ",") List<String> tags;
+            @Override public Integer call() { return 0; }
+        }
+        AccumCmd cmd = new AccumCmd();
+        var res = run(cmd, "--tags=a,b", "--tags=c");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.tags).containsExactly("a", "b", "c");
+    }
+
+    // ========== Edge case: explicit value overrides default for list ==========
+
+    @Test
+    void explicitListValueOverridesDefault() {
+        DefaultIntListOptionCmd cmd = new DefaultIntListOptionCmd();
+        var res = run(cmd, "--xs=9,8,7");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.xs).containsExactly(9, 8, 7);
+    }
+
+    // ========== Edge case: scalar @Option(defaultValue) with typed field ==========
+
+    @Test
+    void scalarAnnotationDefaultValueApplied() {
+        @Command(name = "scalar-def", mixinStandardHelpOptions = true)
+        class ScalarDefCmd implements Callable<Integer> {
+            @Option(names = "--port", defaultValue = "8080") int port;
+            @Option(names = "--host", defaultValue = "localhost") String host;
+            @Override public Integer call() { return 0; }
+        }
+        ScalarDefCmd cmd = new ScalarDefCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertEquals(8080, cmd.port);
+        assertEquals("localhost", cmd.host);
+    }
+
+    @Test
+    void scalarAnnotationDefaultOverriddenByCli() {
+        @Command(name = "scalar-def", mixinStandardHelpOptions = true)
+        class ScalarDefCmd implements Callable<Integer> {
+            @Option(names = "--port", defaultValue = "8080") int port;
+            @Override public Integer call() { return 0; }
+        }
+        ScalarDefCmd cmd = new ScalarDefCmd();
+        var res = run(cmd, "--port", "9090");
+        assertEquals(0, res.exitCode());
+        assertEquals(9090, cmd.port);
+    }
+
+    // ========== Edge case: arity 0..1 with explicit value ==========
+
+    @Test
+    void arityOptionalValueWithExplicitEquals() {
+        OptionArityOptionalValueCmd cmd = new OptionArityOptionalValueCmd();
+        CliTest.of(cmd).args("--mode=fast").run().expectCode(0);
+        assertEquals("fast", cmd.mode);
+    }
+
+    @Test
+    void arityOptionalValueWithSeparateValue() {
+        // The next token after the option is NOT consumed for arity 0..1,
+        // so the default should apply and "fast" becomes a positional → error
+        OptionArityOptionalValueCmd cmd = new OptionArityOptionalValueCmd();
+        var res = run(cmd, "--mode", "fast");
+        // "fast" is treated as an unexpected positional since arity is 0..1
+        assertEquals(2, res.exitCode());
+    }
+
+    // ========== Edge case: multiple positional parameters with indices ==========
+
+    @Test
+    void multiplePositionalParametersWithExplicitIndices() {
+        @Command(name = "multi-pos", mixinStandardHelpOptions = true)
+        class MultiPosCmd implements Callable<Integer> {
+            @Parameters(index = "0", description = "Source") String source;
+            @Parameters(index = "1", description = "Dest") String dest;
+            @Override public Integer call() { return 0; }
+        }
+        MultiPosCmd cmd = new MultiPosCmd();
+        var res = run(cmd, "input.txt", "output.txt");
+        assertEquals(0, res.exitCode());
+        assertEquals("input.txt", cmd.source);
+        assertEquals("output.txt", cmd.dest);
+    }
+
+    @Test
+    void multiplePositionalParametersMissingSecond() {
+        @Command(name = "multi-pos", mixinStandardHelpOptions = true)
+        class MultiPosCmd implements Callable<Integer> {
+            @Parameters(index = "0", description = "Source") String source;
+            @Parameters(index = "1", description = "Dest") String dest;
+            @Override public Integer call() { return 0; }
+        }
+        var res = run(new MultiPosCmd(), "input.txt");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Missing required parameter");
+    }
+
+    // ========== Edge case: boolean flag doesn't consume non-boolean next token ==========
+
+    @Test
+    void booleanFlagDoesNotConsumeNextPositional() {
+        MixedCmd cmd = new MixedCmd();
+        // --name is not boolean, so this tests specifically boolean behavior by
+        // creating a command with boolean + positionals
+        @Command(name = "bool-pos", mixinStandardHelpOptions = true)
+        class BoolPosCmd implements Callable<Integer> {
+            @Option(names = "--flag") boolean flag;
+            @Parameters(index = "0..*") List<String> args;
+            @Override public Integer call() { return 0; }
+        }
+        BoolPosCmd bpc = new BoolPosCmd();
+        var res = run(bpc, "--flag", "notBoolean");
+        assertEquals(0, res.exitCode());
+        assertThat(bpc.flag).isTrue();
+        assertThat(bpc.args).containsExactly("notBoolean");
+    }
+
+    @Test
+    void booleanFlagConsumesExplicitTrueToken() {
+        @Command(name = "bool-pos", mixinStandardHelpOptions = true)
+        class BoolPosCmd implements Callable<Integer> {
+            @Option(names = "--flag") boolean flag;
+            @Parameters(index = "0..*") List<String> args;
+            @Override public Integer call() { return 0; }
+        }
+        BoolPosCmd cmd = new BoolPosCmd();
+        var res = run(cmd, "--flag", "true", "positional");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.flag).isTrue();
+        // "true" is consumed as boolean value, "positional" is the only positional
+        assertThat(cmd.args).containsExactly("positional");
+    }
+
+    @Test
+    void booleanFlagConsumesExplicitFalseToken() {
+        @Command(name = "bool-pos", mixinStandardHelpOptions = true)
+        class BoolPosCmd implements Callable<Integer> {
+            @Option(names = "--flag") boolean flag;
+            @Parameters(index = "0..*") List<String> args;
+            @Override public Integer call() { return 0; }
+        }
+        BoolPosCmd cmd = new BoolPosCmd();
+        var res = run(cmd, "--flag", "false", "positional");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.flag).isFalse();
+        assertThat(cmd.args).containsExactly("positional");
+    }
+
+    // ========== Edge case: -- followed by --help ==========
+
+    @Test
+    void endOfOptionsFollowedByHelpStillTriggersHelp() {
+        VarargsCmd cmd = new VarargsCmd();
+        var res = run(cmd, "--", "--help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Usage:");
+    }
+
+    @Test
+    void endOfOptionsFollowedByVersionStillTriggersVersion() {
+        VarargsCmd cmd = new VarargsCmd();
+        var res = run(cmd, "--", "--version");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).isNotEmpty(); // version info printed (even if "unknown")
+    }
+
+    // ========== Edge case: root as Class reference ==========
+
+    @Command(name = "class-root", mixinStandardHelpOptions = true)
+    static class ClassRootCmd implements Callable<Integer> {
+        @Option(names = "--val") String val;
+        @Override public Integer call() { return 0; }
+    }
+
+    @Test
+    void rootAsClassReferenceInstantiatesAndParsesCorrectly() {
+        var res = FemtoCli.builder().runCaptured(ClassRootCmd.class, "--val", "hello");
+        assertEquals(0, res.exitCode());
+    }
+
+    @Test
+    void rootAsClassReferenceHelpWorks() {
+        var res = FemtoCli.builder().runCaptured(ClassRootCmd.class, "--help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Usage: class-root");
+    }
+
+    // ========== Edge case: root as String throws ==========
+
+    @Test
+    void rootAsStringThrowsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class, () ->
+                FemtoCli.builder().runCaptured("not a command", "--help"));
+    }
+
+    // ========== Edge case: duration all units ==========
+
+    @Test
+    void durationParsesNanoseconds() {
+        assertEquals(Duration.ofNanos(100), FemtoCli.parseDuration("100ns"));
+    }
+
+    @Test
+    void durationParsesSeconds() {
+        assertEquals(Duration.ofSeconds(5), FemtoCli.parseDuration("5s"));
+    }
+
+    @Test
+    void durationParsesMinutes() {
+        assertEquals(Duration.ofMinutes(3), FemtoCli.parseDuration("3m"));
+    }
+
+    @Test
+    void durationParsesHours() {
+        assertEquals(Duration.ofHours(2), FemtoCli.parseDuration("2h"));
+    }
+
+    @Test
+    void durationParsesDays() {
+        assertEquals(Duration.ofDays(1), FemtoCli.parseDuration("1d"));
+    }
+
+    @Test
+    void durationRejectsEmptyString() {
+        assertThrows(IllegalArgumentException.class, () -> FemtoCli.parseDuration(""));
+    }
+
+    @Test
+    void durationRejectsNull() {
+        assertThrows(IllegalArgumentException.class, () -> FemtoCli.parseDuration(null));
+    }
+
+    @Test
+    void durationRejectsUnknownUnit() {
+        assertThrows(IllegalArgumentException.class, () -> FemtoCli.parseDuration("5x"));
+    }
+
+    // ========== Edge case: agent mode basics ==========
+
+    @Test
+    void agentModeBasicParsing() {
+        Sub sub = new Sub();
+        RunResult res = FemtoCli.runAgentCaptured(new Root(), "sub,--req=hello");
+        assertEquals(0, res.exitCode());
+    }
+
+    @Test
+    void agentModeHelpViaBareToken() {
+        RunResult res = FemtoCli.runAgentCaptured(new Root(), "help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Usage:");
+    }
+
+    @Test
+    void agentModeVersionViaBareToken() {
+        RunResult res = FemtoCli.runAgentCaptured(new Root(), "version");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out().trim()).isEqualTo("1.2.3");
+    }
+
+    // ========== Edge case: custom help exit code ==========
+
+    @Test
+    void customHelpExitCodeIsReturned() {
+        var config = new CommandConfig();
+        config.helpExitCode = 42;
+        var res = FemtoCli.builder()
+                .commandConfig(config)
+                .runCaptured(new Root(), "--help");
+        assertEquals(42, res.exitCode());
+        assertThat(res.out()).contains("Usage:");
+    }
+
+    // ========== Edge case: errors to stdout ==========
+
+    @Test
+    void usageErrorsToStdoutWhenConfigured() {
+        var config = new CommandConfig();
+        config.usageErrorsToStdout = true;
+        var res = FemtoCli.builder()
+                .commandConfig(config)
+                .runCaptured(new Root(), "sub");  // missing required option
+        assertEquals(2, res.exitCode());
+        assertThat(res.out()).contains("Missing required option");
+        assertThat(res.err()).isBlank();
+    }
+
+    @Test
+    void usageErrorsToStderrByDefault() {
+        var res = FemtoCli.builder().runCaptured(new Root(), "sub");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Missing required option");
+        assertThat(res.out()).doesNotContain("Missing required option");
+    }
+
+    // ========== Edge case: negative int via equals ==========
+
+    @Test
+    void negativeIntViaEquals() {
+        TypesCmd cmd = new TypesCmd();
+        var res = run(cmd, "-i=-42");
+        assertEquals(0, res.exitCode());
+        assertEquals(-42, cmd.intVal);
+    }
+
+    // ========== Edge case: parameter with default value ==========
+
+    @Test
+    void parameterDefaultValueApplied() {
+        @Command(name = "param-def", mixinStandardHelpOptions = true)
+        class ParamDefCmd implements Callable<Integer> {
+            @Parameters(arity = "0..1", defaultValue = "fallback") String value;
+            @Override public Integer call() { return 0; }
+        }
+        ParamDefCmd cmd = new ParamDefCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        assertEquals("fallback", cmd.value);
+    }
+
+    @Test
+    void parameterDefaultValueOverridden() {
+        @Command(name = "param-def", mixinStandardHelpOptions = true)
+        class ParamDefCmd implements Callable<Integer> {
+            @Parameters(arity = "0..1", defaultValue = "fallback") String value;
+            @Override public Integer call() { return 0; }
+        }
+        ParamDefCmd cmd = new ParamDefCmd();
+        var res = run(cmd, "explicit");
+        assertEquals(0, res.exitCode());
+        assertEquals("explicit", cmd.value);
+    }
+
+    // ========== Edge case: empty varargs for typed arrays ==========
+
+    @Test
+    void emptyIntegerArrayVarargs() {
+        IntArrayParamsCmd cmd = new IntArrayParamsCmd();
+        var res = run(cmd);
+        assertEquals(0, res.exitCode());
+        // No positionals provided → field stays null (array not allocated)
+    }
+
+    // ========== Edge case: command not Runnable or Callable ==========
+
+    @Test
+    void commandNotRunnableOrCallableThrows() {
+        @Command(name = "bad") class BadCmd {}
+        assertThrows(IllegalStateException.class, () ->
+                FemtoCli.builder().runCaptured(new BadCmd()));
+    }
+
+    // ========== Edge case: long overflow ==========
+
+    @Test
+    void longOverflowReturns2() {
+        var res = run(new TypesCmd(), "--long", "99999999999999999999");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Invalid value");
+    }
+
+    // ========== Edge case: option value starting with dash via equals ==========
+
+    @Test
+    void optionValueStartingWithDashViaEquals() {
+        TypesCmd cmd = new TypesCmd();
+        var res = run(cmd, "--string=-dashed-value");
+        assertEquals(0, res.exitCode());
+        assertEquals("-dashed-value", cmd.stringVal);
+    }
+
+    // ========== Edge case: duplicate option last one wins for boolean ==========
+
+    @Test
+    void duplicateBooleanOptionLastOneWins() {
+        TypesCmd cmd = new TypesCmd();
+        var res = run(cmd, "--bool=true", "--bool=false");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.boolVal).isFalse();
+    }
+
+    // ========== Edge case: removeCommands hides subcommand ==========
+
+    @Test
+    void removedSubcommandIsNotAccessible() {
+        var res = FemtoCli.builder()
+                .removeCommands(Sub.class)
+                .runCaptured(new Root(), "sub", "--req=x");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Unknown option: --req");
+    }
+
+    @Test
+    void removedSubcommandNotShownInHelp() {
+        var res = FemtoCli.builder()
+                .removeCommands(Sub.class)
+                .runCaptured(new Root(), "--help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).doesNotContain("sub ");
+    }
+
+    // ========== Bug: --help/--version after options in parent with subcommands ==========
+    // When a parent command (with subcommands) has options, and --help/--version appears
+    // AFTER those options, it should show help/version instead of "Unknown option: --help".
+
+    @Test
+    void helpAfterOptionInParentWithSubcommands() {
+        var res = run(new ParentWithDefaultAndSubcmds(), "--lang=de", "--help");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Usage: tool");
+    }
+
+    @Test
+    void shortHelpAfterOptionInParentWithSubcommands() {
+        var res = run(new ParentWithDefaultAndSubcmds(), "--lang=de", "-h");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("Usage: tool");
+    }
+
+    @Test
+    void versionAfterOptionInParentWithSubcommands() {
+        var res = FemtoCli.builder()
+                .commandConfig(c -> c.version = "9.8.7")
+                .runCaptured(new ParentWithDefaultAndSubcmds(), "--lang=de", "--version");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("9.8.7");
+    }
+
+    @Test
+    void shortVersionAfterOptionInParentWithSubcommands() {
+        var res = FemtoCli.builder()
+                .commandConfig(c -> c.version = "9.8.7")
+                .runCaptured(new ParentWithDefaultAndSubcmds(), "--lang=de", "-V");
+        assertEquals(0, res.exitCode());
+        assertThat(res.out()).contains("9.8.7");
+    }
+
+    // ========== Bug: scalar default values skip verifier ==========
+    // Array/list defaults run verifiers via convertToArray/convertToList, but scalar
+    // defaults only call convert() without runVerifiers(). This is inconsistent.
+
+    public static class RejectBadVerifier implements Verifier<String> {
+        @Override
+        public void verify(String value) throws VerifierException {
+            if ("bad".equals(value)) {
+                throw new VerifierException("value 'bad' is rejected by verifier");
+            }
+        }
+    }
+
+    @Command(name = "scalar-vd")
+    static class ScalarVerifierDefaultCmd implements Callable<Integer> {
+        @Option(names = "--val", defaultValue = "bad", verifier = RejectBadVerifier.class)
+        String val;
+        @Override public Integer call() { return 0; }
+    }
+
+    @Test
+    void scalarDefaultValueRunsVerifier() {
+        // Bug: scalar defaults skip verifier. Default "bad" should be rejected.
+        var res = run(new ScalarVerifierDefaultCmd());
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("value 'bad' is rejected by verifier");
+    }
+
+    @Test
+    void scalarExplicitBadValueRunsVerifier() {
+        // Explicit "bad" value should also be rejected (this already works).
+        var res = run(new ScalarVerifierDefaultCmd(), "--val=bad");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("value 'bad' is rejected by verifier");
+    }
+
+    @Test
+    void scalarExplicitGoodValuePassesVerifier() {
+        ScalarVerifierDefaultCmd cmd = new ScalarVerifierDefaultCmd();
+        var res = run(cmd, "--val=good");
+        assertEquals(0, res.exitCode());
+        assertEquals("good", cmd.val);
+    }
+
+    // ========== Bug: -- end-of-options not propagated to final command ==========
+    // When a parent command (with subcommands) processes --, the "end of options"
+    // state is lost when the same command is re-parsed as the final command.
+
+    @Test
+    void endOfOptionsInParentPropagatesToFinalParsing() {
+        // Bug: -- consumed by parent's parseOptions, but final parseInto starts
+        // fresh with acceptOptions=true, treating --not-an-option as an option.
+        var cmd = new ParentWithDefaultAndSubcmds();
+        var res = run(cmd, "--", "--not-an-option");
+        assertEquals(0, res.exitCode());
+        assertThat(cmd.files).containsExactly("--not-an-option");
+    }
+
+    @Test
+    void endOfOptionsWithOptionsBeforeInParent() {
+        var cmd = new ParentWithDefaultAndSubcmds();
+        var res = run(cmd, "--lang=fr", "--", "--weird-file");
+        assertEquals(0, res.exitCode());
+        assertEquals("fr", cmd.lang);
+        assertThat(cmd.files).containsExactly("--weird-file");
     }
 
 }

@@ -2,6 +2,8 @@ package me.bechberger.femtocli;
 
 import me.bechberger.femtocli.annotations.Mixin;
 import me.bechberger.femtocli.annotations.Option;
+import me.bechberger.femtocli.annotations.Parameters;
+import me.bechberger.femtocli.annotations.Command;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,5 +81,68 @@ public class MixinTest {
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(7, cmd.mixin.d);
+    }
+
+    // --- Bug: @Parameters on mixin objects were silently ignored ---
+
+    static class SharedParams {
+        @Parameters(index = "0", description = "Input file")
+        String input;
+    }
+
+    @Command(name = "test")
+    static class CmdWithMixinParams implements Runnable {
+        @Mixin
+        SharedParams shared;
+
+        @Option(names = "--verbose")
+        boolean verbose;
+
+        @Override
+        public void run() {
+        }
+    }
+
+    @Test
+    public void parametersFromMixinAreCollectedAndBound() {
+        CmdWithMixinParams cmd = new CmdWithMixinParams();
+        var res = FemtoCli.runCaptured(cmd, "myfile.txt");
+        assertEquals(0, res.exitCode());
+        assertNotNull(cmd.shared);
+        assertEquals("myfile.txt", cmd.shared.input);
+    }
+
+    @Test
+    public void parametersFromMixinWorkWithOptions() {
+        CmdWithMixinParams cmd = new CmdWithMixinParams();
+        var res = FemtoCli.runCaptured(cmd, "--verbose", "myfile.txt");
+        assertEquals(0, res.exitCode());
+        assertTrue(cmd.verbose);
+        assertNotNull(cmd.shared);
+        assertEquals("myfile.txt", cmd.shared.input);
+    }
+
+    static class SharedVarargs {
+        @Parameters(index = "0..*", description = "Files")
+        java.util.List<String> files;
+    }
+
+    @Command(name = "test")
+    static class CmdWithMixinVarargs implements Runnable {
+        @Mixin
+        SharedVarargs shared;
+
+        @Override
+        public void run() {
+        }
+    }
+
+    @Test
+    public void varargsParametersFromMixinWork() {
+        CmdWithMixinVarargs cmd = new CmdWithMixinVarargs();
+        var res = FemtoCli.runCaptured(cmd, "a.txt", "b.txt", "c.txt");
+        assertEquals(0, res.exitCode());
+        assertNotNull(cmd.shared);
+        assertEquals(java.util.List.of("a.txt", "b.txt", "c.txt"), cmd.shared.files);
     }
 }

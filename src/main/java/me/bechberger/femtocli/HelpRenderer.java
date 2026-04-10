@@ -7,7 +7,6 @@ import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 
 import static me.bechberger.femtocli.FemtoCli.NO_DEFAULT_VALUE;
@@ -55,7 +54,9 @@ final class HelpRenderer {
         if (commandConfig.effectiveEmptyLineAfterUsage(annotation)) out.println();
 
         if (!agentMode && annotation != null && annotation.description().length > 0) {
-            out.println(annotation.description()[0]);
+            for (String line : annotation.description()) {
+                out.println(line);
+            }
         }
 
         if (commandConfig.effectiveEmptyLineAfterDescription(annotation)) out.println();
@@ -98,7 +99,9 @@ final class HelpRenderer {
             if (!isBoolean) {
                 String token = optName + "=" + getOptionParamLabel(opt);
                 parts.add(opt.opt.required() ? token : "[" + token + "]");
-            } else if (!opt.opt.required()) {
+            } else if (opt.opt.required()) {
+                parts.add(optName);
+            } else {
                 parts.add("[" + optName + "]");
             }
         }
@@ -167,7 +170,8 @@ final class HelpRenderer {
             out.println("Options:");
         }
 
-        optionEntries.sort(Comparator.comparing(e -> e.label.replaceFirst("^\\s*-+", "").toLowerCase()));
+        optionEntries.sort((a, b) -> stripLeadingDashes(a.label.stripLeading()).toLowerCase()
+                .compareTo(stripLeadingDashes(b.label.stripLeading()).toLowerCase()));
         entries.addAll(optionEntries);
 
         int labelColumnWidth = MIN_LABEL_WIDTH;
@@ -183,7 +187,7 @@ final class HelpRenderer {
         String[] names = opt.opt.names();
         if (names.length > 1) {
             names = Arrays.copyOf(names, names.length);
-            Arrays.sort(names, Comparator.comparingInt(String::length));
+            Arrays.sort(names, (a, b) -> a.length() - b.length());
         }
         if (agentMode) {
             for (int i = 0; i < names.length; i++) names[i] = stripLeadingDashes(names[i]);
@@ -224,7 +228,10 @@ final class HelpRenderer {
 
         List<String> result = new ArrayList<>();
         for (String line : text.split("\n", -1)) {
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) {
+                result.add("");
+                continue;
+            }
 
             if (maxWidth <= 0 || line.length() <= maxWidth) {
                 result.add(line);
