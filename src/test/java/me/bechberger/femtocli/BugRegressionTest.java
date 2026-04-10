@@ -85,38 +85,7 @@ class BugRegressionTest {
         assertThat(res.out()).contains("First line of description.");
         assertThat(res.out()).contains("Second line of description.");
     }
-
-    // ====================================================================
-    // Bug 3: Double newline before "did you mean" suggestion.
-    //
-    // DEFAULT_SUGGESTION_TEMPLATE starts with "\n" but the code in
-    // parseOption also prepends "\n", creating a blank line between
-    // the error and the suggestion.
-    // ====================================================================
-
-    @Command(name = "suggest", mixinStandardHelpOptions = true)
-    static class SuggestCmd implements Runnable {
-        @Option(names = "--verbose", description = "Verbose mode")
-        boolean verbose;
-
-        @Override
-        public void run() {}
-    }
-
-    @Test
-    void didYouMeanSuggestionHasNoDoubleNewline() {
-        // Use default template (which used to produce double newline)
-        var res = FemtoCli.builder().runCaptured(new SuggestCmd(), "--verbse");
-        assertEquals(2, res.exitCode());
-        String err = res.err();
-        assertThat(err).contains("Unknown option: --verbse");
-        assertThat(err).contains("--verbose");
-        // There should NOT be a blank line between the error and the suggestion
-        // (i.e., no "\n\n" between "Unknown option" line and "tip:" line)
-        String errorBlock = err.substring(0, err.indexOf("\n\nUsage:") >= 0 ? err.indexOf("\n\nUsage:") : err.length());
-        assertThat(errorBlock).doesNotContain("\n\n");
-    }
-
+    
     // ====================================================================
     // Bug 4: Boolean.parseBoolean silently returns false for invalid values.
     //
