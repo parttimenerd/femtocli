@@ -4,7 +4,7 @@
 
 Powerful yet minimal command line interface framework for Java applications and Java agents.
 
-A minimal (< 45KB) Java command line interface (CLI) framework for building small command line applications,
+A minimal (< 50KB) Java command line interface (CLI) framework for building small command line applications,
 using annotations to define (sub)commands, options, and positional parameters. 
 It is designed for tools where minimizing dependencies and binary size is important.
 
@@ -100,23 +100,23 @@ Hello, World!
 Maven dependency
 ----------------
 
-Add the library as a dependency in your project (< 60KB):
+Add the library as a dependency in your project (< 65KB):
 
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli</artifactId>
-  <version>0.3.10</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
-And for the minimal version without debug metadata (< 45KB):
+And for the minimal version without debug metadata (< 50KB):
 
 ```xml
 <dependency>
   <groupId>me.bechberger.util</groupId>
   <artifactId>femtocli-minimal</artifactId>
-  <version>0.3.10</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
@@ -535,6 +535,51 @@ ys=[c, d]
 rest=[rest1, rest2]
 ```
 <!-- @femtocli:end -->
+
+#### Important: The `split` attribute uses **literal strings**, not regex patterns
+
+When you specify a `split` delimiter, FemtoCli treats it as a **literal string** to split on, not as a regular expression pattern.
+This means special characters like `.`, `+`, `*`, `|`, `[`, `]`, etc. are matched literally, **not** as regex metacharacters.
+
+**Examples**:
+
+```java
+// Using dot as a literal delimiter (NOT as "any character" like regex)
+@Option(names = "--ips", split = ".", description = "IP address parts")
+String[] ips;
+
+// User input: "--ips=192.168.1.1"
+// Result: ["192", "168", "1", "1"] ✓ Splits on literal dots
+// (If this were regex, "." would match any character and cause confusion)
+
+// Using + as a literal delimiter  
+@Option(names = "--tags", split = "+", description = "Tags separated by +")
+String[] tags;
+
+// User input: "--tags=java+spring+boot"
+// Result: ["java", "spring", "boot"] ✓ Splits on literal plus
+// (If this were regex, + is a quantifier and would cause an error)
+
+// Using [ ] as literal delimiters
+@Option(names = "--ranges", split = "[x]", description = "Ranges")
+String[] ranges; 
+
+// User input: "--ranges=10[x]20[x]30"
+// Result: ["10", "20", "30"] ✓ Splits on literal "[x]"
+// (If this were regex, [] defines a character class and would cause confusion)
+```
+
+**Common mistakes to avoid**:
+
+```java
+// ❌ DON'T do this if you want to split on regex:
+// The regex is NOT supported - always use literal strings
+@Option(names = "--items", split = "\\s+")  // Won't work as regex!
+
+// ✓ DO this instead for literal space or custom logic:
+@Option(names = "--items", split = " ")  // Splits on literal space
+// Or use multiple values with --items a --items b instead of splitting
+```
 
 ### Mutually exclusive options [(source)](examples/src/main/java/me/bechberger/femtocli/examples/MutuallyExclusiveOptions.java)
 

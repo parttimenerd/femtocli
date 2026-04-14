@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.4.0] - 2026-04-14
+
+### Added
+- Builtin type converters for `short`, `byte`, and `char` fields
+- `${COMPLETION-CANDIDATES}` and `${DEFAULT-VALUE}` placeholder expansion in `@Parameters` descriptions
+
+### Changed
+- Increased minimal JAR size limit from 45KB to 50KB to accommodate bug fixes
+
+### Fixed
+- Missing builtin converters for `short`/`Short`, `byte`/`Byte`, and `char`/`Character` field types
+- Method-based `@Command` subcommand help ignoring `header`, `description`, `footer`, and `customSynopsis`
+- `SubcommandMethodWrapper` silently returning exit code 0 for non-Integer method returns (now throws like class-based commands)
+- `parseDuration` precision loss for large integer duration values (now uses exact long arithmetic)
+- Empty `customSynopsis` string producing a bare "Usage: " line with no command info
+- Stale Javadoc on `invoke()` claiming non-Integer returns are silently treated as 0
+
 ## [0.3.10] - 2026-04-10
 
 ### Fixed
