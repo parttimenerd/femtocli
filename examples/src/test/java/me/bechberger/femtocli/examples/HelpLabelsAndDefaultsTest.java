@@ -10,15 +10,15 @@ public class HelpLabelsAndDefaultsTest {
     @Test
     public void testHelp() {
         var res = FemtoCli.runCaptured(new HelpLabelsAndDefaults(), "--help");
-        assertEquals("""
-                Usage: help-labels [-hV] [--output=FILE] INPUT [LEVEL]
-                      INPUT        Input file
-                      [LEVEL]      Log level (default: ${DEFAULT-VALUE})
-                  -h, --help       Show this help message and exit.
-                      --output=FILE
-                                   Write result to FILE (default: out.txt)
-                  -V, --version    Print version information and exit.
-                """, res.out());
+        assertEquals(
+            "Usage: help-labels [-hV] [--output=FILE] INPUT [LEVEL]\n"
+                + "      INPUT        Input file\n"
+                + "      [LEVEL]      Log level (default: info)\n"
+                + "  -h, --help       Show this help message and exit.\n"
+                + "      --output=FILE\n"
+                + "                   Write result to FILE (default: out.txt)\n"
+                + "  -V, --version    Print version information and exit.\n",
+            res.out());
     }
 
      @Test

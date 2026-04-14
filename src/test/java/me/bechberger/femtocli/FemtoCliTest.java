@@ -1275,6 +1275,14 @@ class FemtoCliTest {
         assertThat(cmd.enabled).isFalse();
      }
 
+      @Test
+      void booleanExplicitFalseAsSeparateToken() {
+          DefaultValuesCmd cmd = new DefaultValuesCmd();
+          var res = run(cmd, "--enabled", "false");
+          assertEquals(0, res.exitCode());
+          assertThat(cmd.enabled).isFalse();
+      }
+
      // ========== Empty args tests ==========
 
      @Test

@@ -955,6 +955,11 @@ Examples:
         action='store_true',
         help='Render @femtocli:* directives in README.md (in-place), then exit'
     )
+    parser.add_argument(
+        '--github-only',
+        action='store_true',
+        help='Only publish the current version to GitHub (optionally push commits/tags first)'
+    )
 
     args = parser.parse_args()
 
@@ -980,6 +985,75 @@ Examples:
     # Get current version
     current_version = bumper.get_current_version()
     print(f"Current version: {current_version}")
+
+    if args.github_only:
+        tag = f'v{current_version}'
+        do_push = not args.no_push
+
+        changelog_entry = bumper.get_version_changelog_entry(current_version)
+        if not changelog_entry:
+            print(f"\n❌ ERROR: CHANGELOG.md does not contain a released section for {current_version}")
+            print(f"Expected a section like: ## [{current_version}] - YYYY-MM-DD")
+            sys.exit(1)
+
+        local_tags = subprocess.run(
+            ['git', 'tag', '--list', tag],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if tag not in {line.strip() for line in local_tags.stdout.splitlines() if line.strip()}:
+            print(f"\n❌ ERROR: Local git tag {tag} does not exist")
+            print(f"Create it first, e.g. git tag -a {tag} -m 'Release {current_version}'")
+            sys.exit(1)
+
+        if args.dry_run:
+            print("\n=== DRY RUN MODE ===")
+            print("\n📋 Actions that would be performed:")
+            if do_push:
+                print("  • git push")
+                print("  • git push --tags")
+            print(f"  • gh release create {tag} (or upload assets if the release already exists)")
+            print("\n✓ No changes made (dry run)")
+            return
+
+        print("\nThis will:")
+        step = 1
+        if do_push:
+            print(f"  {step}. Push current commits")
+            step += 1
+            print(f"  {step}. Push git tags")
+            step += 1
+        print(f"  {step}. Create or update GitHub release for {tag}")
+
+        response = input("\nContinue? [y/N] ")
+        if response.lower() not in ['y', 'yes']:
+            print("Aborted.")
+            sys.exit(0)
+
+        try:
+            if do_push:
+                print("\n=== Git push ===")
+                bumper.git_push(push_tags=True)
+
+            print("\n=== Creating GitHub release ===")
+            if not (project_root / 'target' / 'femtocli.jar').exists():
+                print("⚠ target/femtocli.jar not found, GitHub release may be created without assets")
+            bumper.create_github_release(current_version)
+        except KeyboardInterrupt:
+            print("\n\n⚠️  GitHub-only release interrupted by user")
+            sys.exit(1)
+
+        print("\n" + "="*60)
+        print(f"✓ Successfully published GitHub release for {current_version}")
+        print("="*60)
+        print("\nCompleted:")
+        print(f"  ✓ Pushed to remote" if do_push else "  ⊘ Push skipped")
+        print("  ✓ GitHub release created or updated")
+        print(f"\n📦 GitHub Release:")
+        print(f"  https://github.com/parttimenerd/femtocli/releases/tag/{tag}")
+        return
 
     # Determine bump type
     if args.major:

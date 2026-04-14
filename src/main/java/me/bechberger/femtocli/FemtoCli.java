@@ -770,8 +770,23 @@ public final class FemtoCli {
             boolean hasRegisteredConverter = converters != null && converters.containsKey(type);
             boolean treatBooleanAsFlag = isBoolean && !hasPerOptionConverter && !hasRegisteredConverter;
 
-            // Boolean flags: presence means true (value only accepted via "=").
+            // Boolean flags also accept an explicit boolean value as the next token,
+            // e.g. "--flag false" or "--flag yes".
             if (treatBooleanAsFlag) {
+                if (!tokens.isEmpty()) {
+                    String candidate = tokens.peekFirst();
+                    try {
+                        value = String.valueOf(parseBoolean(candidate));
+                        tokens.removeFirst();
+                    } catch (IllegalArgumentException ignored) {
+                        // Not an explicit boolean value, so keep normal flag semantics.
+                    }
+                }
+                if (value != null) {
+                    convertVerifyAndSet(cmd, optMeta.target, optMeta.field, value, opt, null, converters);
+                    seenFieldsWithoutValue.remove(optMeta.field);
+                    return;
+                }
                 optMeta.field.set(optMeta.target, true);
                 return;
             }
