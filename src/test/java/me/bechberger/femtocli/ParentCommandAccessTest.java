@@ -411,6 +411,29 @@ class ParentCommandAccessTest {
     }
 
     @Test
+    void multiValueOptionsBeforeAndAfterFirstPositionalArePreserved() {
+        @Command(name = "files", subcommands = {PosChild.class})
+        class RootWithTags implements Runnable {
+            @Option(names = "--tag")
+            List<String> tags;
+
+            @Parameters(index = "0..*")
+            List<String> files;
+
+            @Override
+            public void run() {
+            }
+        }
+
+        var root = new RootWithTags();
+        var res = FemtoCli.runCaptured(root, "--tag", "a", "file1", "--tag", "b");
+
+        assertEquals(0, res.exitCode(), () -> "stderr was: " + res.err());
+        assertThat(root.tags).containsExactly("a", "b");
+        assertThat(root.files).containsExactly("file1");
+    }
+
+    @Test
     void rootWithSubcommandsNoArgsExecutesRoot() {
         var root = new Root();
         var res = FemtoCli.runCaptured(root);

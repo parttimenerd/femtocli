@@ -181,12 +181,10 @@ class FemtoCliAgentSubcommandsEdgeCasesTest {
 
     @Test
     void runAgentCaptured_ambiguousBareOptionIsRejected() {
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> CommandModel.of(new AmbiguousRoot())
-        );
-        assertThat(ex.getMessage()).contains("Ambiguous option name 'x'");
-        assertThat(ex.getMessage()).contains("-x");
-        assertThat(ex.getMessage()).contains("--x");
+        RunResult res = FemtoCli.runAgentCaptured(new AmbiguousRoot(), "x=1");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Ambiguous bare option 'x'");
+        assertThat(res.err()).contains("-x");
+        assertThat(res.err()).contains("--x");
     }
 }

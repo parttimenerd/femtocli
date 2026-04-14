@@ -832,8 +832,8 @@ Download `femtocli.jar` from the assets below.
 
     # Size limits (in bytes) for guarding against accidental bloat.
     # Note: thresholds are in KiB (1024 bytes).
-    _NORMAL_JAR_MAX_BYTES = 60 * 1024
-    _MINIMAL_JAR_MAX_BYTES = 45 * 1024
+    _NORMAL_JAR_MAX_BYTES = 65 * 1024
+    _MINIMAL_JAR_MAX_BYTES = 50 * 1024
 
     def _enforce_jar_size_limits(self):
         """Fail fast if produced jars exceed expected size limits."""

@@ -47,6 +47,20 @@ public class MixinTest {
         }
     }
 
+    static class PreinitializedMixin {
+        @Option(names = "--val")
+        int val = 5;
+    }
+
+    static class CmdWithPreinitializedMixin implements Runnable {
+        @Mixin
+        PreinitializedMixin mixin = new PreinitializedMixin();
+
+        @Override
+        public void run() {
+        }
+    }
+
     @Test
     public void helpOutputIncludesOptionsFromMixinsDeclaredInParentClasses() {
         SubCmd cmd = new SubCmd();
@@ -81,6 +95,17 @@ public class MixinTest {
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(7, cmd.mixin.d);
+    }
+
+    @Test
+    public void preinitializedMixinInstanceIsPreserved() {
+        CmdWithPreinitializedMixin cmd = new CmdWithPreinitializedMixin();
+        cmd.mixin.val = 42;
+
+        var res = FemtoCli.runCaptured(cmd);
+        assertEquals(0, res.exitCode());
+        assertNotNull(cmd.mixin);
+        assertEquals(42, cmd.mixin.val);
     }
 
     // --- Bug: @Parameters on mixin objects were silently ignored ---

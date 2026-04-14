@@ -3050,10 +3050,9 @@ class FemtoCliTest {
             @Override public Integer call() { return 0; }
         }
         BoolPosCmd cmd = new BoolPosCmd();
-        var res = run(cmd, "--flag", "true", "positional");
+        var res = run(cmd, "--flag=true", "positional");
         assertEquals(0, res.exitCode());
         assertThat(cmd.flag).isTrue();
-        // "true" is consumed as boolean value, "positional" is the only positional
         assertThat(cmd.args).containsExactly("positional");
     }
 
@@ -3066,7 +3065,7 @@ class FemtoCliTest {
             @Override public Integer call() { return 0; }
         }
         BoolPosCmd cmd = new BoolPosCmd();
-        var res = run(cmd, "--flag", "false", "positional");
+        var res = run(cmd, "--flag=false", "positional");
         assertEquals(0, res.exitCode());
         assertThat(cmd.flag).isFalse();
         assertThat(cmd.args).containsExactly("positional");
@@ -3075,19 +3074,22 @@ class FemtoCliTest {
     // ========== Edge case: -- followed by --help ==========
 
     @Test
-    void endOfOptionsFollowedByHelpStillTriggersHelp() {
+    void endOfOptionsFollowedByHelpTreatsHelpAsPositional() {
         VarargsCmd cmd = new VarargsCmd();
         var res = run(cmd, "--", "--help");
         assertEquals(0, res.exitCode());
-        assertThat(res.out()).contains("Usage:");
+        // After --, --help should be treated as a positional argument, not trigger help
+        assertThat(res.out()).doesNotContain("Usage:");
+        assertThat(cmd.values).containsExactly("--help");
     }
 
     @Test
-    void endOfOptionsFollowedByVersionStillTriggersVersion() {
+    void endOfOptionsFollowedByVersionTreatsVersionAsPositional() {
         VarargsCmd cmd = new VarargsCmd();
         var res = run(cmd, "--", "--version");
         assertEquals(0, res.exitCode());
-        assertThat(res.out()).isNotEmpty(); // version info printed (even if "unknown")
+        // After --, --version should be treated as a positional argument
+        assertThat(cmd.values).containsExactly("--version");
     }
 
     // ========== Edge case: root as Class reference ==========

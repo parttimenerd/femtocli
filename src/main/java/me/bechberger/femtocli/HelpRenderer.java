@@ -29,6 +29,10 @@ final class HelpRenderer {
 
     static void render(Object cmd, String commandPath, CommandConfig commandConfig, PrintStream out, boolean agentMode) {
         Command annotation = cmd.getClass().getAnnotation(Command.class);
+        // For method-based subcommands, retrieve the @Command from the method instead
+        if (annotation == null && cmd instanceof SubcommandMethodWrapper wrapper) {
+            annotation = wrapper.methodCommand();
+        }
         boolean hasSubcommands = FemtoCli.hasSubcommands(cmd.getClass());
         boolean showStandardHelpOptions = commandConfig.effectiveMixinStandardHelpOptions(annotation);
 
@@ -44,7 +48,7 @@ final class HelpRenderer {
         }
 
         String[] customSynopsis = annotation == null ? null : annotation.customSynopsis();
-        if (customSynopsis != null && customSynopsis.length > 0) {
+        if (customSynopsis != null && customSynopsis.length > 0 && !customSynopsis[0].isEmpty()) {
             out.println("Usage: " + customSynopsis[0]);
             for (int i = 1; i < customSynopsis.length; i++) out.println(customSynopsis[i]);
         } else {
@@ -146,7 +150,8 @@ final class HelpRenderer {
                                                    boolean agentMode) {
         List<HelpEntry> entries = new ArrayList<>();
         for (FemtoCli.ParamInfo param : parameters) {
-            entries.add(new HelpEntry(getLabel(param), param.param.description(), false));
+            String paramDesc = expandPlaceholders(param.param.description(), param.param.defaultValue(), param.field.getType(), null);
+            entries.add(new HelpEntry(getLabel(param), paramDesc, false));
         }
 
         List<HelpEntry> optionEntries = new ArrayList<>();
@@ -213,12 +218,17 @@ final class HelpRenderer {
 
     private static String wrapTextBlock(String text, int maxWidth, int subsequentIndent) {
         if (text == null || text.length() <= maxWidth) return text == null ? "" : text;
-        List<String> lines = wrapLines(text, maxWidth);
-        if (lines.size() <= 1) return lines.isEmpty() ? "" : lines.get(0);
+        // First line uses full maxWidth; subsequent lines must account for indentation
+        int subsequentWidth = Math.max(1, maxWidth - subsequentIndent);
+        List<String> firstLines = wrapLines(text, maxWidth);
+        if (firstLines.size() <= 1) return firstLines.isEmpty() ? "" : firstLines.get(0);
+        // Re-wrap the overflow text at the narrower width
+        String overflow = String.join(" ", firstLines.subList(1, firstLines.size()));
+        List<String> restLines = wrapLines(overflow, subsequentWidth);
         String indent = " ".repeat(Math.max(0, subsequentIndent));
-        StringBuilder sb = new StringBuilder(lines.get(0));
-        for (int i = 1; i < lines.size(); i++) {
-            sb.append("\n").append(indent).append(lines.get(i));
+        StringBuilder sb = new StringBuilder(firstLines.get(0));
+        for (String line : restLines) {
+            sb.append("\n").append(indent).append(line);
         }
         return sb.toString();
     }
@@ -252,7 +262,8 @@ final class HelpRenderer {
             }
         }
 
-        return result.isEmpty() ? List.of(text) : result;
+        // Don't fall back to unwrapped text if result is empty - preserve structure
+        return result;
     }
 
     private static void renderSubcommands(Class<?> cmdClass, boolean hasSubcommands, PrintStream out) {
@@ -271,7 +282,7 @@ final class HelpRenderer {
                 }
             }
         }
-        for (Method method : cmdClass.getDeclaredMethods()) {
+        for (Method method : FemtoCli.collectSubcommandMethods(cmdClass)) {
             Command cmdAnnotation = method.getAnnotation(Command.class);
             if (cmdAnnotation != null && !cmdAnnotation.hidden() && !cmdAnnotation.name().isEmpty()) {
                 maxNameLength = Math.max(maxNameLength, cmdAnnotation.name().length());
@@ -292,7 +303,7 @@ final class HelpRenderer {
                 }
             }
         }
-        for (Method method : cmdClass.getDeclaredMethods()) {
+        for (Method method : FemtoCli.collectSubcommandMethods(cmdClass)) {
             Command cmdAnnotation = method.getAnnotation(Command.class);
             if (cmdAnnotation != null && !cmdAnnotation.hidden() && !cmdAnnotation.name().isEmpty()) {
                 out.printf(fmt, cmdAnnotation.name(), cmdAnnotation.description().length > 0 ? cmdAnnotation.description()[0] : "");

@@ -6,6 +6,10 @@ import java.util.List;
 
 /**
  * Provides access to runtime CLI properties for the currently executing command.
+ *
+ * <p>To use, declare a field of type {@code Spec} on your command class or
+ * {@code @Mixin} class. FemtoCli will automatically inject the instance before
+ * the command executes.
  */
 public final class Spec {
     private final Object command;
@@ -14,15 +18,17 @@ public final class Spec {
     private final List<String> commandPath;
     private final CommandConfig commandConfig;
     private final List<Object> commandChain;
+    private final boolean agentMode;
 
 
-    Spec(Object command, PrintStream out, PrintStream err, List<String> commandPath, CommandConfig commandConfig, List<Object> commandChain) {
+    Spec(Object command, PrintStream out, PrintStream err, List<String> commandPath, CommandConfig commandConfig, List<Object> commandChain, boolean agentMode) {
         this.command = command;
         this.out = out;
         this.err = err;
         this.commandPath = List.copyOf(commandPath);
         this.commandConfig = commandConfig.copy();
         this.commandChain = List.copyOf(commandChain);
+        this.agentMode = agentMode;
     }
 
     public Object command() { return command; }
@@ -74,6 +80,6 @@ public final class Spec {
     /** Print usage for the current command to the provided output stream. */
     public void usage(PrintStream out) {
         // Use the contextual overload so output matches the configuring FemtoCli instance.
-        FemtoCli.usage(command, commandPath, commandConfig, out, false);
+        FemtoCli.usage(command, commandPath, commandConfig, out, agentMode);
     }
 }

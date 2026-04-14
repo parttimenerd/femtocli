@@ -25,12 +25,12 @@ class DidYouMeanTest {
     void testDidYouMeanSuggestion() {
         TestCmd cmd = new TestCmd();
         RunResult res = FemtoCli.builder()
-                .commandConfig(opt -> opt.similarOptionsSuggestionTemplate = "Did you mean: %s?")
+                .commandConfig(opt -> opt.similarOptionsSuggestionTemplate = "Did you mean: ${SUGGESTION}?")
                 .runCaptured(new TestCmd(), "--verbse");
         assertEquals(2, res.exitCode());
         assertEquals("""
                 Error: Unknown option: --verbse
-                Did you mean: %s?
+                Did you mean: --verbose?
                 
                 Usage: test [-hV] [--verbose]
                   -h, --help       Show this help message and exit.

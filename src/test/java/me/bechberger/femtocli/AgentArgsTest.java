@@ -130,6 +130,25 @@ class AgentArgsTest {
         }
     }
 
+    @Command(name = "shadow", subcommands = {ShadowSub.class}, mixinStandardHelpOptions = true)
+    static class ShadowRoot implements Runnable {
+        @Option(names = "--flag")
+        boolean flag;
+
+        @Override
+        public void run() {
+            // no-op
+        }
+    }
+
+    @Command(name = "flag", mixinStandardHelpOptions = true)
+    static class ShadowSub implements Callable<Integer> {
+        @Override
+        public Integer call() {
+            return 17;
+        }
+    }
+
     @Test
     void runAgent_basicOptionAndFlag() {
         TypesCmd cmd = new TypesCmd();
@@ -431,9 +450,19 @@ class AgentArgsTest {
     }
 
     @Test
-    void runAgent_buildTimeAmbiguityForBareOptions_isDetected() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> CommandModel.of(new Amb()));
-        assertThat(ex.getMessage()).contains("Ambiguous option name 'x'");
+    void runAgent_bareOptionAmbiguity_isDetectedAtParseTime() {
+        RunResult res = FemtoCli.runAgentCaptured(new Amb(), "x=1");
+        assertEquals(2, res.exitCode());
+        assertThat(res.err()).contains("Ambiguous bare option 'x'");
+    }
+
+    @Test
+    void runAgent_bareTokenPrefersSubcommandOverBooleanOptionShorthand() {
+        ShadowRoot root = new ShadowRoot();
+        RunResult res = FemtoCli.runAgentCaptured(root, "flag");
+
+        assertEquals(17, res.exitCode());
+        assertThat(root.flag).isFalse();
     }
 
     @Test

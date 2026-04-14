@@ -46,10 +46,12 @@ final class CommandModel {
                     throw new FieldIsFinalException("@Mixin field must not be final: " + field);
                 }
                 field.setAccessible(true);
-                Constructor<?> ctor = field.getType().getDeclaredConstructor();
-                ctor.setAccessible(true);
-                Object mixin = ctor.newInstance();
-                field.set(cmd, mixin);
+                if (field.get(cmd) == null) {
+                    Constructor<?> ctor = field.getType().getDeclaredConstructor();
+                    ctor.setAccessible(true);
+                    Object mixin = ctor.newInstance();
+                    field.set(cmd, mixin);
+                }
             }
         }
     }
@@ -57,22 +59,30 @@ final class CommandModel {
     private static void registerOptionMeta(FemtoCli.OptionMeta meta,
                                            Map<String, FemtoCli.OptionMeta> optionsByName,
                                            Map<Field, FemtoCli.OptionMeta> optionByField,
-                                           List<FemtoCli.OptionMeta> options,
-                                           Map<String, Map<Field, List<String>>> namesByBareAndField) {
+                                           List<FemtoCli.OptionMeta> options) {
+        List<FemtoCli.OptionMeta> overridden = new ArrayList<>();
+        for (String name : meta.opt.names()) {
+            FemtoCli.OptionMeta previous = optionsByName.get(name);
+            if (previous != null && previous.field != meta.field && !overridden.contains(previous)) {
+                overridden.add(previous);
+            }
+        }
+
+        for (FemtoCli.OptionMeta previous : overridden) {
+            optionByField.remove(previous.field);
+            options.remove(previous);
+            for (Iterator<Map.Entry<String, FemtoCli.OptionMeta>> it = optionsByName.entrySet().iterator(); it.hasNext(); ) {
+                if (it.next().getValue() == previous) {
+                    it.remove();
+                }
+            }
+        }
+
         options.add(meta);
         optionByField.put(meta.field, meta);
 
         for (String name : meta.opt.names()) {
             optionsByName.put(name, meta);
-
-            if (namesByBareAndField != null) {
-                String bare = HelpRenderer.stripLeadingDashes(name);
-                if (bare.isBlank()) continue;
-                namesByBareAndField
-                        .computeIfAbsent(bare, k -> new LinkedHashMap<>())
-                        .computeIfAbsent(meta.field, k -> new ArrayList<>())
-                        .add(name);
-            }
         }
     }
 
@@ -112,8 +122,7 @@ final class CommandModel {
                                           IgnoreOptions ignore,
                                           Map<String, FemtoCli.OptionMeta> optionsByName,
                                           Map<Field, FemtoCli.OptionMeta> optionByField,
-                                          List<FemtoCli.OptionMeta> options,
-                                          Map<String, Map<Field, List<String>>> namesByBareAndField) {
+                                          List<FemtoCli.OptionMeta> options) {
         for (Field field : declaredIn.getDeclaredFields()) {
             Option opt = field.getAnnotation(Option.class);
             if (opt == null) continue;
@@ -124,23 +133,26 @@ final class CommandModel {
             if (!shouldIncludeOption(ignore, field, opt)) {
                 continue;
             }
-            registerOptionMeta(new FemtoCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options, namesByBareAndField);
+            registerOptionMeta(new FemtoCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options);
         }
     }
 
     private static void collectOptionsFrom(Object holder,
                                           Map<String, FemtoCli.OptionMeta> optionsByName,
                                           Map<Field, FemtoCli.OptionMeta> optionByField,
-                                          List<FemtoCli.OptionMeta> options,
-                                          Map<String, Map<Field, List<String>>> namesByBareAndField) {
+                                          List<FemtoCli.OptionMeta> options) {
         IgnoreOptions ignore = holder.getClass().getAnnotation(IgnoreOptions.class);
 
         // inherited first (older classes first), then declared: declared overrides inherited
         Class<?> type = holder.getClass();
+        List<Class<?>> hierarchy = new ArrayList<>();
         for (Class<?> current = type.getSuperclass(); current != null && current != Object.class; current = current.getSuperclass()) {
-            addDeclaredOptions(holder, current, ignore, optionsByName, optionByField, options, namesByBareAndField);
+            hierarchy.add(current);
         }
-        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options, namesByBareAndField);
+        for (int i = hierarchy.size() - 1; i >= 0; i--) {
+            addDeclaredOptions(holder, hierarchy.get(i), ignore, optionsByName, optionByField, options);
+        }
+        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options);
     }
 
 
@@ -151,28 +163,17 @@ final class CommandModel {
         Map<String, FemtoCli.OptionMeta> optionsByName = new LinkedHashMap<>();
         Map<Field, FemtoCli.OptionMeta> optionByField = new LinkedHashMap<>();
         List<FemtoCli.OptionMeta> options = new ArrayList<>();
-        Map<String, Map<Field, List<String>>> namesByBareAndField = new LinkedHashMap<>();
 
         // Collect mixin options first, then command options (so command overrides same-name options)
         for (Field field : FemtoCli.allFields(cmd.getClass())) {
             if (field.getAnnotation(Mixin.class) != null) {
                 field.setAccessible(true);
                 if (field.get(cmd) != null) {
-                    collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options, namesByBareAndField);
+                    collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options);
                 }
             }
         }
-        collectOptionsFrom(cmd, optionsByName, optionByField, options, namesByBareAndField);
-
-        // Fail early if agent-mode bare option normalization would be ambiguous.
-        for (var e : namesByBareAndField.entrySet()) {
-            if (e.getValue().size() > 1) {
-                List<String> names = new ArrayList<>();
-                for (List<String> ns : e.getValue().values()) names.addAll(ns);
-                throw new IllegalArgumentException(
-                        "Ambiguous option name '" + e.getKey() + "' (use distinct names): " + String.join(", ", names));
-            }
-        }
+        collectOptionsFrom(cmd, optionsByName, optionByField, options);
 
         List<FemtoCli.ParamInfo> params = new ArrayList<>();
         // Collect @Parameters from mixin objects first
@@ -189,6 +190,9 @@ final class CommandModel {
         collectParameters(cmd, cmd, params);
         params.sort((a, b) -> Integer.compare(a.indexRange[0], b.indexRange[0]));
 
+        // Detect duplicate/overlapping scalar @Parameters indices
+        validateParameterIndices(params);
+
         return new CommandModel(cmd, optionsByName, optionByField, options, params);
     }
 
@@ -203,5 +207,44 @@ final class CommandModel {
                 params.add(new FemtoCli.ParamInfo(f, target, p, FemtoCli.parseRange(p.index()), FemtoCli.parseRange(p.arity())));
             }
         }
+    }
+
+    /**
+     * Detects duplicate or overlapping @Parameters index declarations.
+     * Two scalar parameters with the same fixed index, or two parameters whose index
+     * ranges overlap, are a configuration error and should fail fast.
+     */
+    private static void validateParameterIndices(List<FemtoCli.ParamInfo> params) {
+        for (int i = 0; i < params.size(); i++) {
+            for (int j = i + 1; j < params.size(); j++) {
+                FemtoCli.ParamInfo a = params.get(i);
+                FemtoCli.ParamInfo b = params.get(j);
+                // Skip if either has unspecified index (marker -2)
+                if (a.indexRange[0] < 0 || b.indexRange[0] < 0) continue;
+                // Skip if they refer to the same field (e.g. inherited)
+                if (a.field.equals(b.field)) continue;
+                if (rangesOverlap(a.indexRange, b.indexRange)) {
+                    String labelA = a.param.paramLabel().isEmpty() ? a.field.getName() : a.param.paramLabel();
+                    String labelB = b.param.paramLabel().isEmpty() ? b.field.getName() : b.param.paramLabel();
+                    throw new IllegalArgumentException(
+                            "Overlapping @Parameters index: fields '" + labelA + "' and '" + labelB
+                                    + "' both claim index " + formatRange(a.indexRange) + " / " + formatRange(b.indexRange));
+                }
+            }
+        }
+    }
+
+    private static boolean rangesOverlap(int[] a, int[] b) {
+        int aStart = a[0];
+        int aEnd = a[1] < 0 ? Integer.MAX_VALUE : a[1]; // -1 means unbounded
+        int bStart = b[0];
+        int bEnd = b[1] < 0 ? Integer.MAX_VALUE : b[1];
+        return aStart <= bEnd && bStart <= aEnd;
+    }
+
+    private static String formatRange(int[] range) {
+        if (range[0] == range[1]) return String.valueOf(range[0]);
+        String end = range[1] < 0 ? "*" : String.valueOf(range[1]);
+        return range[0] + ".." + end;
     }
 }

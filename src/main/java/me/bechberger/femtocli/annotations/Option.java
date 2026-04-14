@@ -47,7 +47,18 @@ public @interface Option {
     /**
      * Delimiter for splitting values into array/list elements.
      * E.g., "," to split "a,b,c" into ["a", "b", "c"].
-     * If empty, multiple occurrences of the option are collected instead.
+     * If empty, multiple occurrences of the option are collected instead.     * 
+     * <p><strong>Important:</strong> The delimiter is treated as a literal string, NOT as a regular expression
+     * pattern. For example, "." splits on a literal dot, not on "any character" like regex.
+     * Special characters like +, *, |, [, ], etc. are matched literally.</p>
+     * 
+     * <p>Examples:</p>
+     * <ul>
+     *   <li>{@code split = ","} splits on comma: "a,b,c" → ["a", "b", "c"]</li>
+     *   <li>{@code split = "."} splits on dot: "192.168.1.1" → ["192", "168", "1", "1"]</li>
+     *   <li>{@code split = "+"} splits on plus: "x+y+z" → ["x", "y", "z"]</li>
+     *   <li>{@code split = " "} splits on space: "a b c" → ["a", "b", "c"]</li>
+     * </ul>     
      */
     String split() default "";
 
