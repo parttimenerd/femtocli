@@ -474,8 +474,12 @@ class VersionBumper:
         self.changelog.write_text(content)
         print(f"✓ Updated CHANGELOG.md for version {version}")
 
-    def create_github_release(self, version: str):
-        """Create GitHub release using gh CLI and CHANGELOG.md"""
+    def create_github_release(self, version: str) -> bool:
+        """Create GitHub release using gh CLI and CHANGELOG.md.
+
+        Returns True on success, False when the release could not be created,
+        for example because the GitHub CLI is unavailable or unauthenticated.
+        """
         tag = f'v{version}'
 
         # Check if gh CLI is available
@@ -485,17 +489,29 @@ class VersionBumper:
             print("⚠ GitHub CLI (gh) not found. Skipping GitHub release creation.")
             print("  Install with: brew install gh  (macOS)")
             print("  Or visit: https://cli.github.com/")
-            return
+            return False
 
-        # Check authentication
+        # Check authentication for github.com specifically.
+        # `gh auth status` without `-h github.com` can behave inconsistently when
+        # multiple hosts are configured, while release creation always targets GitHub.
         try:
-            result = subprocess.run(['gh', 'auth', 'status'], capture_output=True, text=True)
+            result = subprocess.run(
+                ['gh', 'auth', 'status', '-h', 'github.com'],
+                capture_output=True,
+                text=True,
+            )
             if result.returncode != 0:
-                print("⚠ GitHub CLI not authenticated. Run: gh auth login")
-                return
-        except:
+                token_result = subprocess.run(
+                    ['gh', 'auth', 'token'],
+                    capture_output=True,
+                    text=True,
+                )
+                if token_result.returncode != 0 or not token_result.stdout.strip():
+                    print("⚠ GitHub CLI not authenticated for github.com. Run: gh auth login")
+                    return False
+        except Exception:
             print("⚠ Could not check GitHub CLI auth status")
-            return
+            return False
 
         # Get changelog entry for this specific version (after it's been released in CHANGELOG.md)
         changelog_entry = self.get_version_changelog_entry(version)
@@ -556,6 +572,7 @@ Download `femtocli.jar` from the assets below.
                     self.run_command(upload_cmd, f"Uploading GitHub release assets for {tag}")
                 else:
                     raise
+            return True
         finally:
             # Clean up notes file
             if notes_file.exists():
@@ -1040,7 +1057,9 @@ Examples:
             print("\n=== Creating GitHub release ===")
             if not (project_root / 'target' / 'femtocli.jar').exists():
                 print("⚠ target/femtocli.jar not found, GitHub release may be created without assets")
-            bumper.create_github_release(current_version)
+            if not bumper.create_github_release(current_version):
+                print("\n❌ GitHub release was not created.")
+                sys.exit(1)
         except KeyboardInterrupt:
             print("\n\n⚠️  GitHub-only release interrupted by user")
             sys.exit(1)
@@ -1211,7 +1230,8 @@ Examples:
             # Ensure the jar exists in target/ before creating the GitHub release.
             if not (project_root / 'target' / 'femtocli.jar').exists():
                 print("⚠ target/femtocli.jar not found, build artifacts may be missing")
-            bumper.create_github_release(new_version)
+            if not bumper.create_github_release(new_version):
+                raise RuntimeError("GitHub release creation failed")
 
         # Cleanup backups after successful release
         bumper.cleanup_backups()
