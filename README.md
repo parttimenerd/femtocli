@@ -34,6 +34,7 @@ Features
 - Custom `header`, `customSynopsis`, and `footer` in help output
 - Ability to hide commands and options from help output
 - Dynamically remove command classes at runtime via `FemtoCli.builder().removeCommands(...)`
+- Parse-only mode via `FemtoCli.parse(...)` to populate annotated objects without invoking command callbacks
 - Support for "agent args" mode, like Java agents
 - Helpful error messages with "did you mean" suggestions for mistyped options
 
@@ -984,6 +985,70 @@ Example that uses Spec
   -h, --help                   Show this help message and exit.
   -i, --interval=<interval>    Sampling interval (default: 10ms)
   -V, --version                Print version information and exit.
+```
+<!-- @femtocli:end -->
+
+### Parse-only mode [(source)](examples/src/main/java/me/bechberger/femtocli/examples/ParseOnly.java)
+
+Use `FemtoCli.parse(...)` when you want annotation-based argument parsing without invoking `run()` or `call()`.
+The parsed object is returned directly, and if a subcommand is selected, the returned object is that subcommand instance.
+
+<!-- @femtocli:include-java path="examples/src/main/java/me/bechberger/femtocli/examples/ParseOnly.java" -->
+```java
+package me.bechberger.femtocli.examples;
+
+import me.bechberger.femtocli.FemtoCli;
+import me.bechberger.femtocli.annotations.Command;
+import me.bechberger.femtocli.annotations.Option;
+
+/**
+ * Demonstrates parse-only mode, where fields are populated without invoking Runnable/Callable callbacks.
+ */
+@Command(name = "parse-only", description = "Populate fields without executing commands", subcommands = {ParseOnly.Server.class})
+public class ParseOnly {
+
+    @Option(names = "--profile", defaultValue = "dev", description = "Selected profile (default: ${DEFAULT-VALUE})")
+    String profile;
+
+    @Option(names = "--verbose", description = "Enable verbose mode")
+    boolean verbose;
+
+    @Command(name = "server", description = "Server configuration")
+    public static class Server {
+        @Option(names = "--port", defaultValue = "8080", description = "Port to bind (default: ${DEFAULT-VALUE})")
+        int port;
+    }
+
+    public static void main(String[] args) {
+        Object parsed = FemtoCli.parse(new ParseOnly(), args);
+        if (parsed instanceof Server server) {
+            System.out.println("selected=server");
+            System.out.println("port=" + server.port);
+            return;
+        }
+        ParseOnly root = (ParseOnly) parsed;
+        System.out.println("selected=root");
+        System.out.println("profile=" + root.profile);
+        System.out.println("verbose=" + root.verbose);
+    }
+}
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="ParseOnly" args=["--profile=prod","--verbose"] -->
+```sh
+> ./examples/run.sh ParseOnly --profile=prod --verbose
+selected=root
+profile=prod
+verbose=true
+```
+<!-- @femtocli:end -->
+
+<!-- @femtocli:run-java class="ParseOnly" args=["server","--port","9090"] -->
+```sh
+> ./examples/run.sh ParseOnly server --port 9090
+selected=server
+port=9090
 ```
 <!-- @femtocli:end -->
 

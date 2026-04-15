@@ -73,6 +73,24 @@ public final class FemtoCli {
         public RunResult runCaptured(Object root, String... args) {
             return FemtoCli.captureExecute(root, args, converters, commandConfig, false, removedCommands);
         }
+
+        /**
+         * Parse arguments into command objects without invoking Runnable/Callable methods.
+         *
+         * <p>The return type is {@link Object} rather than a generic {@code <T>} because parsing can
+         * select a subcommand and therefore return a different command object than the supplied root.
+         * For example, parsing into a root command may route to a subcommand class and return that
+         * subcommand instance after its fields have been populated.
+         */
+        public Object parse(Object root, String... args) {
+            return FemtoCli.parseExecute(root, System.out, System.err, args, converters, commandConfig, false, removedCommands);
+        }
+
+        /** Parse agent args into command objects without invoking Runnable/Callable methods. */
+        public Object parseAgent(Object root, String agentArgs) {
+            String[] argv = AgentArgs.toArgv(agentArgs);
+            return FemtoCli.parseExecute(root, System.out, System.err, argv, converters, commandConfig, true, removedCommands);
+        }
     }
 
     public static Builder builder() { return new Builder(); }
@@ -88,6 +106,19 @@ public final class FemtoCli {
 
     public static RunResult runCaptured(Object root, String... args) {
         return builder().runCaptured(root, args);
+    }
+
+    /**
+     * Parse arguments into command objects without invoking Runnable/Callable methods.
+     *
+     * <p>The return type is {@link Object} rather than a generic {@code <T>} because parsing can
+     * select a subcommand and return that parsed subcommand instance instead of the supplied root
+     * object. A signature such as {@code <T> T parse(T root, ...)} would therefore be unsound.
+     *
+     * @return the parsed command object, either the root command or the selected subcommand
+     */
+    public static Object parse(Object root, String... args) {
+        return parseExecute(root, System.out, System.err, args, Map.of(), new CommandConfig(), false, Set.of());
     }
 
     public static int run(Object root, String... args) {
@@ -126,6 +157,12 @@ public final class FemtoCli {
         return captureExecute(root, argv, Map.of(), new CommandConfig(), true, Set.of());
     }
 
+    /** Parse agent args into command objects without invoking Runnable/Callable methods. */
+    public static Object parseAgent(Object root, String agentArgs) {
+        String[] argv = AgentArgs.toArgv(agentArgs);
+        return parseExecute(root, System.out, System.err, argv, Map.of(), new CommandConfig(), true, Set.of());
+    }
+
     private static final Object CAPTURE_LOCK = new Object();
 
     /**
@@ -161,11 +198,25 @@ public final class FemtoCli {
         }
     }
 
-    private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
-                               Map<Class<?>, TypeConverter<?>> converters,
-                               CommandConfig commandConfig,
-                               boolean agentMode,
-                               Set<Class<?>> removedCommands) {
+    private static final String PARSE_MODE_HELP_MSG =
+            "--help/--version are not supported in parse mode; use run/runCaptured instead";
+
+    private static void rejectHelpVersion(Deque<String> tokens, boolean agentMode) {
+        if (isHelpOrVersionToken(tokens, agentMode)) {
+            throw new IllegalArgumentException(PARSE_MODE_HELP_MSG);
+        }
+    }
+
+    private static void validateDefaultSubcommandListed(Class<?> defaultSub, Command ann, Class<?> cmdClass) {
+        for (Class<?> s : ann.subcommands()) {
+            if (s == defaultSub) return;
+        }
+        throw new IllegalArgumentException(
+                "defaultSubcommand " + defaultSub.getSimpleName()
+                + " must be listed in subcommands() of @Command on " + cmdClass.getSimpleName());
+    }
+
+    private static Object instantiateRoot(Object root) {
         if (root instanceof String) {
             throw new IllegalArgumentException("Root command cannot be a String (got " + root + ").");
         }
@@ -173,11 +224,43 @@ public final class FemtoCli {
             try {
                 var ctor = clazz.getDeclaredConstructor();
                 ctor.setAccessible(true);
-                root = ctor.newInstance();
+                return ctor.newInstance();
             } catch (Exception e) {
                 throw new IllegalArgumentException("Cannot instantiate root: " + clazz.getName(), e);
             }
         }
+        return root;
+    }
+
+    private static int execute(Object root, PrintStream out, PrintStream err, String[] args,
+                               Map<Class<?>, TypeConverter<?>> converters,
+                               CommandConfig commandConfig,
+                               boolean agentMode,
+                               Set<Class<?>> removedCommands) {
+        return (int) executeInternal(instantiateRoot(root), out, err, args, converters,
+                commandConfig, agentMode, removedCommands, false);
+    }
+
+    private static Object parseExecute(Object root, PrintStream out, PrintStream err, String[] args,
+                                       Map<Class<?>, TypeConverter<?>> converters,
+                                       CommandConfig commandConfig,
+                                       boolean agentMode,
+                                       Set<Class<?>> removedCommands) {
+        return executeInternal(instantiateRoot(root), out, err, args, converters,
+                commandConfig, agentMode, removedCommands, true);
+    }
+
+    /**
+     * Shared routing and parsing implementation.
+     * Returns {@link Integer} exit code in execute mode ({@code parseOnly=false}),
+     * or the parsed command {@link Object} in parse mode ({@code parseOnly=true}).
+     */
+    private static Object executeInternal(Object root, PrintStream out, PrintStream err, String[] args,
+                                          Map<Class<?>, TypeConverter<?>> converters,
+                                          CommandConfig commandConfig,
+                                          boolean agentMode,
+                                          Set<Class<?>> removedCommands,
+                                          boolean parseOnly) {
         UsageContext previous = USAGE_CONTEXT.get();
         Set<Class<?>> previousRemoved = REMOVED_COMMANDS.get();
         try {
@@ -193,21 +276,19 @@ public final class FemtoCli {
             // Process commands and their options in sequence
             while (true) {
                 // Check for help/version at current level
-                int hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
-                if (hvResult >= 0) return hvResult;
+                if (parseOnly) {
+                    rejectHelpVersion(tokens, agentMode);
+                } else {
+                    int hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
+                    if (hvResult >= 0) return hvResult;
+                }
 
                 // If the current command has no subcommands, it's the final command
                 if (!hasSubcommands(cmd.getClass())) {
                     // Validate that no defaultSubcommand is set on a command with no reachable subcommands
                     Command ann = cmd.getClass().getAnnotation(Command.class);
                     if (ann != null && ann.defaultSubcommand() != void.class) {
-                        boolean listed = false;
-                        for (Class<?> s : ann.subcommands()) { if (s == ann.defaultSubcommand()) { listed = true; break; } }
-                        if (!listed) {
-                            throw new IllegalArgumentException(
-                                "defaultSubcommand " + ann.defaultSubcommand().getSimpleName()
-                                + " must be listed in subcommands() of @Command on " + cmd.getClass().getSimpleName());
-                        }
+                        validateDefaultSubcommandListed(ann.defaultSubcommand(), ann, cmd.getClass());
                     }
                     break;
                 }
@@ -227,14 +308,12 @@ public final class FemtoCli {
 
                 // Consume leading positional parameter values for this command so that
                 // the subcommand lookup below sees the actual subcommand name.
-                // E.g. for "agent <PID> start ...", consume <PID> then find "start".
                 List<String> parentPositionals = consumeLeadingPositionalTokens(cmd, tokens, model, agentMode);
 
                 // After parsing options, check if there's a subcommand
                 if (tokens.isEmpty()) {
-                    // No subcommand given - parent is invoked directly.
-                    // Always call bindPositionals to validate required parameters.
                     bindPositionals(cmd, parentPositionals, model.parameters, converters);
+                    if (parseOnly) return cmd;
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     return invoke(cmd);
                 }
@@ -242,10 +321,14 @@ public final class FemtoCli {
                 // Check for help/version again after parsing options
                 // (but not if end-of-options marker was seen — tokens after "--" are positional)
                 if (!model.endOfOptionsSeen) {
-                    hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
-                    if (hvResult >= 0) {
-                        maybeBindPositionals(cmd, parentPositionals, model, converters);
-                        return hvResult;
+                    if (parseOnly) {
+                        rejectHelpVersion(tokens, agentMode);
+                    } else {
+                        int hvResult = checkHelpVersion(tokens, agentMode, cmd, root, out, commandPath, commandConfig);
+                        if (hvResult >= 0) {
+                            maybeBindPositionals(cmd, parentPositionals, model, converters);
+                            return hvResult;
+                        }
                     }
                 }
 
@@ -264,7 +347,7 @@ public final class FemtoCli {
                         subCtor.setAccessible(true);
                         cmd = subCtor.newInstance();
                         commandPath.add(commandName(cmd));
-                        continue; // Process next level
+                        continue;
                     }
 
                     // Check for @Command method
@@ -280,6 +363,7 @@ public final class FemtoCli {
                         method.setAccessible(true);
                         var wrapper = new SubcommandMethodWrapper(cmd, method);
                         parseInto(wrapper, out, err, tokens, converters, Set.of(), agentMode, commandChain);
+                        if (parseOnly) return cmd;
                         return wrapper.call();
                     }
                 }
@@ -287,7 +371,10 @@ public final class FemtoCli {
                 // Bare "help" token in subcommand position → treat as --help
                 // (but not after "--" end-of-options marker)
                 if (!model.endOfOptionsSeen && "help".equals(next)) {
-                    maybeBindPositionals(cmd, parentPositionals, model, converters); 
+                    if (parseOnly) {
+                        throw new IllegalArgumentException(PARSE_MODE_HELP_MSG);
+                    }
+                    maybeBindPositionals(cmd, parentPositionals, model, converters);
                     setUsageCtx(commandPath, commandConfig, agentMode);
                     usage(cmd, out);
                     return commandConfig.helpExitCode;
@@ -297,13 +384,7 @@ public final class FemtoCli {
                 Command cmdAnn = cmd.getClass().getAnnotation(Command.class);
                 Class<?> defaultSub = cmdAnn != null ? cmdAnn.defaultSubcommand() : void.class;
                 if (defaultSub != void.class && !isCommandRemoved(defaultSub)) {
-                    // Validate that defaultSubcommand is listed in subcommands()
-                    boolean listed = false;
-                    for (Class<?> s : cmdAnn.subcommands()) { if (s == defaultSub) { listed = true; break; } }
-                    if (!listed) {
-                        throw new IllegalArgumentException(
-                            "defaultSubcommand " + defaultSub.getSimpleName() + " must be listed in subcommands() of @Command on " + cmd.getClass().getSimpleName());
-                    }
+                    validateDefaultSubcommandListed(defaultSub, cmdAnn, cmd.getClass());
                     // Put positionals back – they become positionals for the default subcommand
                     for (int i = parentPositionals.size() - 1; i >= 0; i--) tokens.addFirst(parentPositionals.get(i));
                     commandChain.add(cmd);
@@ -325,11 +406,17 @@ public final class FemtoCli {
 
             // Final command: full parsing (options + positionals + required validation)
             setUsageCtx(commandPath, commandConfig, agentMode);
-
             parseInto(cmd, out, err, tokens, converters, preParsedFields, agentMode, commandChain);
+            if (parseOnly) return cmd;
             return invoke(cmd);
 
         } catch (UsageEx e) {
+            if (parseOnly) {
+                if (e.help || e.version) {
+                    throw new IllegalArgumentException(PARSE_MODE_HELP_MSG, e);
+                }
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
             Object target = e.cmd != null ? e.cmd : root;
             if (e.help) {
                 usage(target, out);
@@ -339,7 +426,6 @@ public final class FemtoCli {
                 version(root, out);
                 return 0;
             }
-            // Print error and usage to stderr by default, or stdout if configured
             PrintStream errorStream = commandConfig.usageErrorsToStdout ? out : err;
             errorStream.println("Error: " + e.getMessage());
             errorStream.println();
@@ -349,6 +435,9 @@ public final class FemtoCli {
             throw e;
         } catch (Exception e) {
             String msg = e.getMessage();
+            if (parseOnly) {
+                throw new IllegalArgumentException(msg != null ? msg : e.toString(), e);
+            }
             err.println("Error: " + (msg != null ? msg : e.toString()));
             return 1;
         } finally {
@@ -515,6 +604,11 @@ public final class FemtoCli {
         return -1;
     }
 
+    private static boolean isHelpOrVersionToken(Deque<String> tokens, boolean agentMode) {
+        String next = peekNormalized(tokens, agentMode);
+        return "--help".equals(next) || "-h".equals(next) || "--version".equals(next) || "-V".equals(next);
+    }
+
 
 
     /**
@@ -577,7 +671,6 @@ public final class FemtoCli {
     }
 
     /**
-     * Shared option-parsing loop. When stopAtNonOption is true, stops at first non-option
      * token and leaves it in the queue.
      */
     private static List<String> parseOptions(CommandModel model, Object cmd, Deque<String> tokens,
