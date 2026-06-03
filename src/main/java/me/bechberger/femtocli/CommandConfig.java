@@ -24,6 +24,8 @@ public class CommandConfig {
     public int helpExitCode = 0;
     /** Print usage to stdout instead of stderr when there's a CLI usage error (default: false, prints to stderr) */
     public boolean usageErrorsToStdout = false;
+    /** Show full usage text after parameter/option errors (default: true). When false, only the error message is shown. */
+    public boolean showUsageOnError = true;
 
     public CommandConfig() {
     }
@@ -44,6 +46,7 @@ public class CommandConfig {
         c.similarOptionsSuggestionTemplate = similarOptionsSuggestionTemplate;
         c.helpExitCode = helpExitCode;
         c.usageErrorsToStdout = usageErrorsToStdout;
+        c.showUsageOnError = showUsageOnError;
         return c;
     }
 

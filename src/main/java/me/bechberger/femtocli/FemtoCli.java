@@ -428,8 +428,10 @@ public final class FemtoCli {
             }
             PrintStream errorStream = commandConfig.usageErrorsToStdout ? out : err;
             errorStream.println("Error: " + e.getMessage());
-            errorStream.println();
-            usage(target, errorStream);
+            if (commandConfig.showUsageOnError) {
+                errorStream.println();
+                usage(target, errorStream);
+            }
             return 2;
         } catch (FieldIsFinalException | IllegalStateException | IllegalArgumentException e) {
             throw e;
