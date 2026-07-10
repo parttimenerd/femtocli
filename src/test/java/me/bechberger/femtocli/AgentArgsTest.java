@@ -116,6 +116,28 @@ class AgentArgsTest {
         }
     }
 
+    // Mirrors the cjfr agent's `start` subcommand shape: a root with a subcommand that has
+    // BOTH a positional parameter (the recording path) and a name=value option (the config).
+    @Command(name = "pos-root", subcommands = {StartLike.class}, mixinStandardHelpOptions = true)
+    static class PosRoot implements Runnable {
+        @Override
+        public void run() {}
+    }
+
+    @Command(name = "start", mixinStandardHelpOptions = true)
+    static class StartLike implements Callable<Integer> {
+        @me.bechberger.femtocli.annotations.Parameters(index = "0", arity = "0..1", description = "path")
+        String path;
+
+        @Option(names = "--config", description = "config")
+        String config;
+
+        @Override
+        public Integer call() {
+            return 0;
+        }
+    }
+
     @Command(name = "amb", mixinStandardHelpOptions = true)
     static class Amb implements Callable<Integer> {
         @Option(names = "-x")
@@ -447,6 +469,27 @@ class AgentArgsTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> FemtoCli.runAgentCaptured(new Root(), "sub,'help"));
         assertThat(ex.getMessage()).contains("Unterminated");
+    }
+
+    @Test
+    void runAgent_bareOptionAfterPositionalOnSubcommand_binds() {
+        // The cjfr agent's `start` shape: subcommand with BOTH a positional and a name=value option.
+        // Bare `config=...` (no leading `--`) must normalize and bind after the positional path.
+        StartLike cmd = new StartLike();
+        RunResult res = FemtoCli.runAgentCaptured(cmd, "/tmp/rec.cjfr,config=gc_details");
+        assertEquals(0, res.exitCode(),
+                () -> "stderr was: " + res.err() + "\nstdout was: " + res.out());
+        assertEquals("/tmp/rec.cjfr", cmd.path);
+        assertEquals("gc_details", cmd.config);
+    }
+
+    @Test
+    void runAgent_bareOptionAfterPositional_viaRoot() {
+        // Exercises the full root->subcommand path, matching how the cjfr agent invokes `start`.
+        RunResult res = FemtoCli.runAgentCaptured(
+                new PosRoot(), "start,/tmp/rec.cjfr,config=gc_details");
+        assertEquals(0, res.exitCode(),
+                () -> "stderr was: " + res.err() + "\nstdout was: " + res.out());
     }
 
     @Test
