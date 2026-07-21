@@ -79,6 +79,35 @@ public class IgnoreOptionsTest {
     static class SubOfBaseWithCollectableMixin extends BaseWithCollectableMixin {
     }
 
+    static class SharedMixin {
+        @Option(names = "--shared")
+        int shared;
+
+        @Option(names = "--kept")
+        int kept;
+    }
+
+    /** Command-level @IgnoreOptions must also filter options contributed by a @Mixin. */
+    @IgnoreOptions(exclude = "--shared")
+    static class CmdExcludingMixinOption implements Runnable {
+        @Mixin
+        SharedMixin mixin;
+
+        @Override
+        public void run() {
+        }
+    }
+
+    /** Sibling command reusing the same mixin without filtering — proves the mixin is unmodified. */
+    static class CmdKeepingMixinOption implements Runnable {
+        @Mixin
+        SharedMixin mixin;
+
+        @Override
+        public void run() {
+        }
+    }
+
     @Test
     public void excludeInheritedOption() {
         ExcludeOne cmd = new ExcludeOne();
@@ -131,5 +160,28 @@ public class IgnoreOptionsTest {
         assertEquals(0, res.exitCode());
         assertNotNull(cmd.mixin);
         assertEquals(42, cmd.mixin.mi);
+    }
+
+    @Test
+    public void commandLevelIgnoreFiltersMixinOption() {
+        CmdExcludingMixinOption cmd = new CmdExcludingMixinOption();
+
+        var excluded = FemtoCli.runCaptured(cmd, "--shared", "3");
+        assertEquals(2, excluded.exitCode());
+        assertTrue(excluded.err().contains("Unknown option"));
+
+        // sibling options on the same mixin remain available
+        var kept = FemtoCli.runCaptured(cmd, "--kept", "5");
+        assertEquals(0, kept.exitCode());
+        assertEquals(5, cmd.mixin.kept);
+    }
+
+    @Test
+    public void commandLevelIgnoreDoesNotAffectOtherCommandsSharingMixin() {
+        CmdKeepingMixinOption cmd = new CmdKeepingMixinOption();
+
+        var res = FemtoCli.runCaptured(cmd, "--shared", "9");
+        assertEquals(0, res.exitCode());
+        assertEquals(9, cmd.mixin.shared);
     }
 }

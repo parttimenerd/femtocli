@@ -116,10 +116,22 @@ final class CommandModel {
         return !matchesAnyRule(ignore.options(), field, opt);
     }
 
+    /**
+     * An option is included only if it survives every applicable {@link IgnoreOptions}. This lets a
+     * command-level {@code @IgnoreOptions} filter options inherited from a {@code @Mixin} in
+     * addition to the mixin's own annotation.
+     */
+    private static boolean shouldIncludeOption(List<IgnoreOptions> ignores, Field field, Option opt) {
+        for (IgnoreOptions ignore : ignores) {
+            if (!shouldIncludeOption(ignore, field, opt)) return false;
+        }
+        return true;
+    }
+
 
     private static void addDeclaredOptions(Object holder,
                                           Class<?> declaredIn,
-                                          IgnoreOptions ignore,
+                                          List<IgnoreOptions> ignores,
                                           Map<String, FemtoCli.OptionMeta> optionsByName,
                                           Map<Field, FemtoCli.OptionMeta> optionByField,
                                           List<FemtoCli.OptionMeta> options) {
@@ -130,18 +142,26 @@ final class CommandModel {
             if (Modifier.isFinal(field.getModifiers())) {
                 throw new FieldIsFinalException("@Option field must not be final: " + field);
             }
-            if (!shouldIncludeOption(ignore, field, opt)) {
+            if (!shouldIncludeOption(ignores, field, opt)) {
                 continue;
             }
             registerOptionMeta(new FemtoCli.OptionMeta(field, holder, opt), optionsByName, optionByField, options);
         }
     }
 
+    /**
+     * @param extraIgnore an additional {@link IgnoreOptions} to apply on top of the holder's own
+     *     annotation (used to pass the command-level annotation down to mixin holders); may be null
+     */
     private static void collectOptionsFrom(Object holder,
+                                          IgnoreOptions extraIgnore,
                                           Map<String, FemtoCli.OptionMeta> optionsByName,
                                           Map<Field, FemtoCli.OptionMeta> optionByField,
                                           List<FemtoCli.OptionMeta> options) {
-        IgnoreOptions ignore = holder.getClass().getAnnotation(IgnoreOptions.class);
+        List<IgnoreOptions> ignores = new ArrayList<>();
+        IgnoreOptions own = holder.getClass().getAnnotation(IgnoreOptions.class);
+        if (own != null) ignores.add(own);
+        if (extraIgnore != null) ignores.add(extraIgnore);
 
         // inherited first (older classes first), then declared: declared overrides inherited
         Class<?> type = holder.getClass();
@@ -150,9 +170,9 @@ final class CommandModel {
             hierarchy.add(current);
         }
         for (int i = hierarchy.size() - 1; i >= 0; i--) {
-            addDeclaredOptions(holder, hierarchy.get(i), ignore, optionsByName, optionByField, options);
+            addDeclaredOptions(holder, hierarchy.get(i), ignores, optionsByName, optionByField, options);
         }
-        addDeclaredOptions(holder, type, ignore, optionsByName, optionByField, options);
+        addDeclaredOptions(holder, type, ignores, optionsByName, optionByField, options);
     }
 
 
@@ -164,16 +184,19 @@ final class CommandModel {
         Map<Field, FemtoCli.OptionMeta> optionByField = new LinkedHashMap<>();
         List<FemtoCli.OptionMeta> options = new ArrayList<>();
 
-        // Collect mixin options first, then command options (so command overrides same-name options)
+        // Collect mixin options first, then command options (so command overrides same-name options).
+        // The command-level @IgnoreOptions is threaded into mixin collection so a command can filter
+        // options it inherits from a @Mixin (not just its own options).
+        IgnoreOptions cmdIgnore = cmd.getClass().getAnnotation(IgnoreOptions.class);
         for (Field field : FemtoCli.allFields(cmd.getClass())) {
             if (field.getAnnotation(Mixin.class) != null) {
                 field.setAccessible(true);
                 if (field.get(cmd) != null) {
-                    collectOptionsFrom(field.get(cmd), optionsByName, optionByField, options);
+                    collectOptionsFrom(field.get(cmd), cmdIgnore, optionsByName, optionByField, options);
                 }
             }
         }
-        collectOptionsFrom(cmd, optionsByName, optionByField, options);
+        collectOptionsFrom(cmd, null, optionsByName, optionByField, options);
 
         List<FemtoCli.ParamInfo> params = new ArrayList<>();
         // Collect @Parameters from mixin objects first

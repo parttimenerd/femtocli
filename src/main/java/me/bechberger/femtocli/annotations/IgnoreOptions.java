@@ -12,9 +12,13 @@ import java.lang.annotation.Target;
  * (including inherited fields) as well as from any {@code @Mixin} instances.</p>
  *
  * <p>Add this annotation to a class to filter the options collected from that class' hierarchy.
- * Note: the annotation is evaluated per "option holder" (the command object itself and each mixin object).
- * So to ignore options defined in a mixin class, put {@code @IgnoreOptions} on the mixin class.
- * To ignore options defined on the command class (or inherited by it), put it on the command class.</p>
+ * The annotation on a mixin class filters that mixin's own options.
+ * The annotation on a command class filters options defined on (or inherited by) the command class
+ * <em>and</em> options contributed by the command's {@code @Mixin} fields. This lets a command hide
+ * an option it inherits from a shared mixin without modifying the mixin.</p>
+ *
+ * <p>When both a command and one of its mixins carry {@code @IgnoreOptions}, an option is kept only
+ * if it survives both: either annotation may exclude it.</p>
  *
  * <p>Semantics:</p>
  * <ul>
