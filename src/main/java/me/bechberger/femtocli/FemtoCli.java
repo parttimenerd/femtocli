@@ -91,6 +91,17 @@ public final class FemtoCli {
             String[] argv = AgentArgs.toArgv(agentArgs);
             return FemtoCli.parseExecute(root, System.out, System.err, argv, converters, commandConfig, true, removedCommands);
         }
+
+        /** Enable mixed-style detection: appends a comma-form hint on unknown-option errors. */
+        public Builder alertOnMixedStyleInAgent(boolean alert) {
+            commandConfig.alertOnMixedStyleInAgent = alert;
+            return this;
+        }
+
+        /** Run agent args from an already-parsed argv array (e.g. after filtering meta-flags). */
+        public int runAgent(Object root, PrintStream out, PrintStream err, String[] argv) {
+            return FemtoCli.execute(root, out, err, argv, converters, commandConfig, true, removedCommands);
+        }
     }
 
     public static Builder builder() { return new Builder(); }
@@ -152,9 +163,26 @@ public final class FemtoCli {
         return execute(root, out, err, argv, Map.of(), new CommandConfig(), true, Set.of());
     }
 
+    /**
+     * Run the CLI in agent mode with an already-parsed argv array.
+     * Use this when you have already called {@link #toArgv(String)} to pre-process the args
+     * (e.g. to filter meta-flags like {@code --logToFile} before dispatch).
+     */
+    public static int runAgent(Object root, PrintStream out, PrintStream err, String[] argv) {
+        return execute(root, out, err, argv, Map.of(), new CommandConfig(), true, Set.of());
+    }
+
     public static RunResult runAgentCaptured(Object root, String agentArgs) {
         String[] argv = AgentArgs.toArgv(agentArgs);
         return captureExecute(root, argv, Map.of(), new CommandConfig(), true, Set.of());
+    }
+
+    /**
+     * Parse an agent-args string into a {@code String[]} argv.
+     * Public wrapper around the package-private {@link AgentArgs#toArgv(String)}.
+     */
+    public static String[] toArgv(String agentArgs) {
+        return AgentArgs.toArgv(agentArgs);
     }
 
     /** Parse agent args into command objects without invoking Runnable/Callable methods. */
@@ -428,6 +456,13 @@ public final class FemtoCli {
             }
             PrintStream errorStream = commandConfig.usageErrorsToStdout ? out : err;
             errorStream.println("Error: " + e.getMessage());
+            if (commandConfig.alertOnMixedStyleInAgent) {
+                String hint = buildMixedStyleHint(e.cmd != null ? e.cmd : root, args);
+                if (hint != null) {
+                    errorStream.println(
+                            "You may have used CLI-style options — try the agent form: " + hint);
+                }
+            }
             if (commandConfig.showUsageOnError) {
                 errorStream.println();
                 usage(target, errorStream);
@@ -1731,6 +1766,58 @@ public final class FemtoCli {
         Object converted = convert(value, field.getType(), field.getName(), opt, param, converters, cmdForErrors, target);
         runVerifiers(cmdForErrors, converted, opt, param, target);
         field.set(target, converted);
+    }
+
+    /**
+     * If any argv token, when split on spaces, yields sub-tokens that are all recognized option
+     * or subcommand names in {@code cmd}, returns the suggested comma-separated form; otherwise null.
+     */
+    private static String buildMixedStyleHint(Object cmd, String[] argv) {
+        if (cmd == null || argv == null || argv.length == 0) return null;
+        Set<String> known = new HashSet<>();
+        try {
+            CommandModel model = CommandModel.of(cmd);
+            for (var entry : model.optionsByName.entrySet()) {
+                if (!entry.getValue().opt.hidden()) known.add(entry.getKey());
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        Command ann = cmd.getClass().getAnnotation(Command.class);
+        if (ann != null) {
+            for (Class<?> sub : ann.subcommands()) {
+                Command subAnn = sub.getAnnotation(Command.class);
+                if (subAnn != null) {
+                    known.add(subAnn.name());
+                    // also collect the subcommand's own options
+                    try {
+                        Object subInst = sub.getDeclaredConstructor().newInstance();
+                        CommandModel subModel = CommandModel.of(subInst);
+                        for (var entry : subModel.optionsByName.entrySet()) {
+                            if (!entry.getValue().opt.hidden()) known.add(entry.getKey());
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        if (known.isEmpty()) return null;
+        List<String> suggestion = new ArrayList<>();
+        boolean anyExpanded = false;
+        for (String token : argv) {
+            String[] parts = token.split(" ");
+            if (parts.length > 1) {
+                boolean allKnown = Arrays.stream(parts)
+                        .map(p -> p.contains("=") ? p.substring(0, p.indexOf('=')) : p)
+                        .allMatch(known::contains);
+                if (allKnown) {
+                    anyExpanded = true;
+                    suggestion.addAll(Arrays.asList(parts));
+                    continue;
+                }
+            }
+            suggestion.add(token);
+        }
+        return anyExpanded ? String.join(",", suggestion) : null;
     }
 
     private static String findSimilarOption(String invalid, Set<String> validOptions) {

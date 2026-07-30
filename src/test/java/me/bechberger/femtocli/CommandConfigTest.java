@@ -4,6 +4,10 @@ import me.bechberger.femtocli.annotations.Command;
 import me.bechberger.femtocli.annotations.Option;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.concurrent.Callable;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,6 +25,80 @@ class CommandConfigTest {
         public void run() {
         }
     }
+
+    // --- fixture for alertOnMixedStyleInAgent tests ---
+
+    @Command(name = "agent-test", description = "Agent test CLI",
+            subcommands = {AgentTestCmd.Start.class, AgentTestCmd.Stop.class})
+    static class AgentTestCmd implements Runnable {
+        @Override public void run() {}
+
+        @Command(name = "start", description = "Start")
+        static class Start implements Callable<Integer> {
+            @Option(names = "--config", defaultValue = "default")
+            String config;
+            @Override public Integer call() { return 0; }
+        }
+
+        @Command(name = "stop", description = "Stop")
+        static class Stop implements Callable<Integer> {
+            @Override public Integer call() { return 0; }
+        }
+    }
+
+    private static RunResult runAgentCaptured(boolean alert, String... argv) {
+        var outBuf = new ByteArrayOutputStream();
+        var errBuf = new ByteArrayOutputStream();
+        var out = new PrintStream(outBuf);
+        var err = new PrintStream(errBuf);
+        int code = FemtoCli.builder()
+                .alertOnMixedStyleInAgent(alert)
+                .runAgent(new AgentTestCmd(), out, err, argv);
+        return new RunResult(outBuf.toString(), errBuf.toString(), code);
+    }
+
+    @Test
+    void alertOnMixedStyleInAgent_appendsHintWhenAllSubTokensAreKnown() {
+        // "start --config=lossless" as a single space-containing token — both sub-tokens are known
+        var res = runAgentCaptured(true, new String[]{"start --config=lossless"});
+        assertThat(res.exitCode()).isNotEqualTo(0);
+        assertThat(res.err()).contains("try the agent form: start,--config=lossless");
+    }
+
+    @Test
+    void alertOnMixedStyleInAgent_noHintWhenSubTokensAreUnknown() {
+        // "start /path/with space" — "/path/with" is not a known option or subcommand
+        var res = runAgentCaptured(true, new String[]{"start /path/with space"});
+        assertThat(res.err()).doesNotContain("try the agent form");
+    }
+
+    @Test
+    void alertOnMixedStyleInAgent_disabledByDefault() {
+        // same bad input but flag off — no hint appended
+        var res = runAgentCaptured(false, new String[]{"start --config=lossless"});
+        assertThat(res.exitCode()).isNotEqualTo(0);
+        assertThat(res.err()).doesNotContain("try the agent form");
+    }
+
+    @Test
+    void alertOnMixedStyleInAgent_multipleTokensExpanded() {
+        // Two good tokens and one space-merged one: "stop start --config=lossless" all known
+        var res = runAgentCaptured(true, new String[]{"stop start --config=lossless"});
+        assertThat(res.err()).contains("try the agent form");
+        assertThat(res.err()).contains("stop");
+        assertThat(res.err()).contains("start");
+        assertThat(res.err()).contains("--config=lossless");
+    }
+
+    @Test
+    void configCopyPreservesAlertOnMixedStyleInAgent() {
+        var config = new CommandConfig();
+        config.alertOnMixedStyleInAgent = true;
+        var copy = config.copy();
+        assertTrue(copy.alertOnMixedStyleInAgent);
+    }
+
+    // --- existing tests ---
 
     @Test
     void helpExitCodeDefaultsToZero() {

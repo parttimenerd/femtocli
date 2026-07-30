@@ -26,6 +26,11 @@ public class CommandConfig {
     public boolean usageErrorsToStdout = false;
     /** Show full usage text after parameter/option errors (default: true). When false, only the error message is shown. */
     public boolean showUsageOnError = true;
+    /**
+     * When true, unknown-option errors in agent mode append a hint when the bad token looks like
+     * CLI-style space-separated options whose sub-tokens are all recognized option/subcommand names.
+     */
+    public boolean alertOnMixedStyleInAgent = false;
 
     public CommandConfig() {
     }
@@ -47,6 +52,7 @@ public class CommandConfig {
         c.helpExitCode = helpExitCode;
         c.usageErrorsToStdout = usageErrorsToStdout;
         c.showUsageOnError = showUsageOnError;
+        c.alertOnMixedStyleInAgent = alertOnMixedStyleInAgent;
         return c;
     }
 

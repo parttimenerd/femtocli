@@ -1266,6 +1266,38 @@ Options:
 <!-- @femtocli:end -->
 
 
+#### Mixed-style detection
+
+A common mistake is passing CLI-style space-separated options instead of comma-separated ones:
+
+```sh
+# Wrong: spaces are not separators in agent args
+-javaagent:agent.jar=start recording.cjfr --config=lossless
+
+# Correct:
+-javaagent:agent.jar=start,recording.cjfr,--config=lossless
+```
+
+Enable `alertOnMixedStyleInAgent` to detect this and suggest the correct form when all
+space-split sub-tokens are recognized option or subcommand names in the active command:
+
+```java
+FemtoCli.builder()
+    .alertOnMixedStyleInAgent(true)
+    .runAgent(new MyAgent(), agentArgs);
+```
+
+When a user passes `start --config=lossless` as a single agent-args token, the error becomes:
+
+```
+Error: Unexpected parameter: start --config=lossless
+You may have used CLI-style options — try the agent form: start,--config=lossless
+```
+
+The hint is only shown when the space-split sub-tokens are all recognized — unknown tokens
+(e.g. a file path with a space) do not trigger it.
+
+
 ### Custom type converters [(source)](examples/src/main/java/me/bechberger/femtocli/examples/CustomTypeConverters.java)
 
 Femtocli supports parsing the primitive types and their boxing wrappers, as well as Duration and Path, 
