@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.4.2] - 2026-07-30
+
+### Added
+- `CommandConfig.alertOnMixedStyleInAgent` flag (and matching `Builder.alertOnMixedStyleInAgent(boolean)` method): when enabled, unknown-option errors in agent mode append a hint such as `You may have used CLI-style options — try the agent form: start,--config=lossless` when every space-split sub-token of a bad argument matches a real option or subcommand name
+- `FemtoCli.runAgent(Object, PrintStream, PrintStream, String[])` static overload and the matching `Builder.runAgent` overload for callers that pre-parse the argv themselves
+- `FemtoCli.toArgv(String)` public wrapper around `AgentArgs.toArgv()` for reuse outside femtocli
+
+### Removed
+- `AgentArgs.checkForMixedStyle` heuristic (space-before-dash detection) — replaced by the more accurate semantic check described above
+
 ## [0.4.1] - 2026-07-21
 
 ### Added
