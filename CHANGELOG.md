@@ -17,7 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.3] - 2026-07-30
 
 ### Added
-- `FemtoCli.toArgv(String)` public static method: splits an agent args string into a `String[]` argv, delegating to `AgentArgs.toArgv` (previously package-private)
+- `Builder.runAgent(Object, String)` convenience overload for passing a raw agent-args string through the builder (e.g. to combine with `alertOnMixedStyleInAgent`)
+
+### Fixed
+- `FemtoCli.runAgent(Object, PrintStream, PrintStream, String[])` and `FemtoCli.toArgv(String)` were accidentally dropped in 0.4.2; restored (used by callers that pre-process tokens before dispatch)
+- Incorrect javadoc on `AgentArgs` claiming space-before-dash detection throws — that behaviour was never implemented
+- CI: examples module failed to compile against 0.4.2 due to missing `Builder.runAgent(Object, String)` overload
 
 ## [0.4.2] - 2026-07-30
 
