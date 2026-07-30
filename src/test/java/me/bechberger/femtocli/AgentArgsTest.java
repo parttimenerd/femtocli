@@ -4,6 +4,8 @@ import me.bechberger.femtocli.annotations.Command;
 import me.bechberger.femtocli.annotations.Option;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.concurrent.Callable;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -568,5 +570,60 @@ class AgentArgsTest {
         // Outside-quote spaces trimmed, inside-quote spaces preserved
         String[] argv = AgentArgs.toArgv("  ' x '  ");
         assertThat(argv).containsExactly(" x ");
+    }
+
+    // --- FemtoCli.toArgv (public wrapper) ---
+
+    @Test
+    void publicToArgv_delegatesToAgentArgs() {
+        assertThat(FemtoCli.toArgv("--string=hello,-b,-i,34"))
+                .containsExactly("--string=hello", "-b", "-i", "34");
+    }
+
+    @Test
+    void publicToArgv_rejectsEmptyToken() {
+        assertThrows(IllegalArgumentException.class, () -> FemtoCli.toArgv("a,,b"));
+    }
+
+    @Test
+    void publicToArgv_returnsEmptyArrayForBlankInput() {
+        assertThat(FemtoCli.toArgv("")).isEmpty();
+    }
+
+    // --- FemtoCli.runAgent(Object, PrintStream, PrintStream, String[]) ---
+    // This overload exists so callers can pre-process tokens before dispatch
+    // (e.g. filter meta-flags like --logToFile) without losing custom builder config.
+
+    private static RunResult runAgentWithArgv(String... argv) {
+        var outBuf = new ByteArrayOutputStream();
+        var errBuf = new ByteArrayOutputStream();
+        int code = FemtoCli.runAgent(new TypesCmd(),
+                new PrintStream(outBuf), new PrintStream(errBuf), argv);
+        return new RunResult(outBuf.toString(), errBuf.toString(), code);
+    }
+
+    @Test
+    void runAgent_argv_basicOptionsParsed() {
+        var res = runAgentWithArgv("--string=hello", "-b", "-i", "34");
+        assertEquals(0, res.exitCode());
+    }
+
+    @Test
+    void runAgent_argv_unknownOptionReturnsError() {
+        var res = runAgentWithArgv("--does-not-exist");
+        assertThat(res.exitCode()).isNotEqualTo(0);
+        assertThat(res.err()).contains("Unknown option");
+    }
+
+    @Test
+    void runAgent_argv_splitFilterDispatch_patternWorks() {
+        // Mirrors how Agent.java uses these two methods together:
+        // 1. toArgv() to tokenize, 2. filter a meta-flag, 3. runAgent(argv) to dispatch.
+        String[] all = FemtoCli.toArgv("--string=hello,--logToFile,-i,1");
+        String[] filtered = java.util.Arrays.stream(all)
+                .filter(t -> !t.equals("--logToFile"))
+                .toArray(String[]::new);
+        var res = runAgentWithArgv(filtered);
+        assertEquals(0, res.exitCode());
     }
 }

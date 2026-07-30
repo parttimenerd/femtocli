@@ -98,6 +98,11 @@ public final class FemtoCli {
             return this;
         }
 
+        /** Run agent args from a single comma-separated string, using {@link System#out} and {@link System#err}. */
+        public int runAgent(Object root, String agentArgs) {
+            return runAgent(root, System.out, System.err, AgentArgs.toArgv(agentArgs));
+        }
+
         /** Run agent args from an already-parsed argv array (e.g. after filtering meta-flags). */
         public int runAgent(Object root, PrintStream out, PrintStream err, String[] argv) {
             return FemtoCli.execute(root, out, err, argv, converters, commandConfig, true, removedCommands);
@@ -163,26 +168,22 @@ public final class FemtoCli {
         return execute(root, out, err, argv, Map.of(), new CommandConfig(), true, Set.of());
     }
 
-    /**
-     * Run the CLI in agent mode with an already-parsed argv array.
-     * Use this when you have already called {@link #toArgv(String)} to pre-process the args
-     * (e.g. to filter meta-flags like {@code --logToFile} before dispatch).
-     */
+    /** Run the CLI in agent mode with an already-parsed argv array (e.g. after filtering meta-flags). */
     public static int runAgent(Object root, PrintStream out, PrintStream err, String[] argv) {
         return execute(root, out, err, argv, Map.of(), new CommandConfig(), true, Set.of());
+    }
+
+    /**
+     * Parse an agent-args string into a {@code String[]} argv.
+     * Useful when you need to pre-process tokens (e.g. filter meta-flags) before dispatch.
+     */
+    public static String[] toArgv(String agentArgs) {
+        return AgentArgs.toArgv(agentArgs);
     }
 
     public static RunResult runAgentCaptured(Object root, String agentArgs) {
         String[] argv = AgentArgs.toArgv(agentArgs);
         return captureExecute(root, argv, Map.of(), new CommandConfig(), true, Set.of());
-    }
-
-    /**
-     * Parse an agent-args string into a {@code String[]} argv.
-     * Public wrapper around the package-private {@link AgentArgs#toArgv(String)}.
-     */
-    public static String[] toArgv(String agentArgs) {
-        return AgentArgs.toArgv(agentArgs);
     }
 
     /** Parse agent args into command objects without invoking Runnable/Callable methods. */

@@ -17,11 +17,6 @@ import java.util.List;
  *   <li>Whitespace around tokens is trimmed (outside of quotes).</li>
  *   <li>Empty tokens (caused by ",," or a trailing comma) are rejected; use {@code --opt=} to pass an empty value.</li>
  * </ul>
- * <p>
- * A common mistake is to use spaces instead of commas to separate options, e.g.
- * {@code --config=lossless --output=foo.cjfr}. The parser detects this pattern (an unprotected
- * space followed by {@code -} inside a token) and throws an {@link IllegalArgumentException}
- * with a suggested corrected comma-separated form.
  */
 final class AgentArgs {
 
