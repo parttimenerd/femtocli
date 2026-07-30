@@ -1214,7 +1214,9 @@ public class AgentCli implements Runnable {
         // Demonstrate agent mode if a single agent-args string is passed,
         // otherwise fall back to normal argv parsing.
         if (args.length == 1) {
-            System.exit(FemtoCli.runAgent(new AgentCli(), args[0]));
+            System.exit(FemtoCli.builder()
+                    .alertOnMixedStyleInAgent(true)
+                    .runAgent(new AgentCli(), args[0]));
         }
         System.exit(FemtoCli.run(new AgentCli(), args));
     }
