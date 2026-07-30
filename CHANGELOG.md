@@ -17,11 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.3] - 2026-07-30
 
 ### Added
-### Changed
-
-## [0.4.3] - 2026-07-30
-
-### Added
 - `FemtoCli.toArgv(String)` public static method: splits an agent args string into a `String[]` argv, delegating to `AgentArgs.toArgv` (previously package-private)
 
 ## [0.4.2] - 2026-07-30
