@@ -17,6 +17,11 @@ import java.util.List;
  *   <li>Whitespace around tokens is trimmed (outside of quotes).</li>
  *   <li>Empty tokens (caused by ",," or a trailing comma) are rejected; use {@code --opt=} to pass an empty value.</li>
  * </ul>
+ * <p>
+ * A common mistake is to use spaces instead of commas to separate options, e.g.
+ * {@code --config=lossless --output=foo.cjfr}. The parser detects this pattern (an unprotected
+ * space followed by {@code -} inside a token) and throws an {@link IllegalArgumentException}
+ * with a suggested corrected comma-separated form.
  */
 final class AgentArgs {
 
@@ -82,7 +87,55 @@ final class AgentArgs {
         }
         addToken(out, cur, protectedChars);
 
+        checkForMixedStyle(out, agentArgs);
+
         return out.toArray(String[]::new);
+    }
+
+    /**
+     * Detects the common mistake of using spaces instead of commas to separate options.
+     * A token like {@code "--config=lossless --output=foo.cjfr"} looks like two options
+     * merged into one by a space; we suggest the corrected comma-separated form.
+     */
+    private static void checkForMixedStyle(List<String> tokens, String original) {
+        for (String token : tokens) {
+            if (indexOfSpaceDash(token) >= 0) {
+                String suggestion = buildSuggestion(tokens);
+                throw new IllegalArgumentException(
+                        "Agent args look like they use spaces as separators instead of commas.\n"
+                                + "Received:  " + original + "\n"
+                                + "Try using: " + suggestion);
+            }
+        }
+    }
+
+    /** Returns the index of the first {@code ' '} followed by {@code -}, or -1. */
+    private static int indexOfSpaceDash(String token) {
+        for (int i = 0; i < token.length() - 1; i++) {
+            if (token.charAt(i) == ' ' && token.charAt(i + 1) == '-') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Builds a suggested corrected agent-args string by splitting all space-separated
+     * options within each token and re-joining everything with commas.
+     */
+    private static String buildSuggestion(List<String> tokens) {
+        List<String> parts = new ArrayList<>();
+        for (String token : tokens) {
+            // Split on space-before-dash boundaries
+            String[] subTokens = token.split("(?<= )(?=-)");
+            for (String sub : subTokens) {
+                String trimmed = sub.trim();
+                if (!trimmed.isEmpty()) {
+                    parts.add(trimmed);
+                }
+            }
+        }
+        return String.join(",", parts);
     }
 
     private static void addToken(List<String> out, StringBuilder cur, List<Boolean> protectedChars) {

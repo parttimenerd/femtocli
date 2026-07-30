@@ -569,4 +569,43 @@ class AgentArgsTest {
         String[] argv = AgentArgs.toArgv("  ' x '  ");
         assertThat(argv).containsExactly(" x ");
     }
+
+    @Test
+    void toArgv_spaceSeparatedOptionsAreDetectedAsMixedStyle() {
+        // The user example: spaces between options instead of commas
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> AgentArgs.toArgv("start, output.cjfr, --config=gc_details --condenser-config=lossless"));
+        assertThat(ex.getMessage()).contains("spaces as separators");
+        assertThat(ex.getMessage()).contains("Try using:");
+        assertThat(ex.getMessage()).contains("--config=gc_details,--condenser-config=lossless");
+    }
+
+    @Test
+    void toArgv_mixedStyleSuggestionIncludesAllTokens() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> AgentArgs.toArgv("start,output.cjfr,--config=lossless --output=foo.cjfr"));
+        String msg = ex.getMessage();
+        assertThat(msg).contains("start");
+        assertThat(msg).contains("output.cjfr");
+        assertThat(msg).contains("--config=lossless");
+        assertThat(msg).contains("--output=foo.cjfr");
+    }
+
+    @Test
+    void toArgv_singleDashOptionAfterSpaceAlsoDetected() {
+        // -v instead of --verbose
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> AgentArgs.toArgv("start,output.cjfr,-v --config=lossless"));
+        assertThat(ex.getMessage()).contains("spaces as separators");
+    }
+
+    @Test
+    void toArgv_spaceInTokenWithoutDashIsNotMixedStyle() {
+        // A filename with a space is NOT the mixed-style pattern
+        String[] argv = AgentArgs.toArgv("start,'my output.cjfr',--config=lossless");
+        assertThat(argv).containsExactly("start", "my output.cjfr", "--config=lossless");
+    }
 }
